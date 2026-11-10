@@ -4,13 +4,13 @@ Proyecto final de **Programación III** · Universidad del Quindío · Ingenier�
 
 Simulación, en Elixir, de una plataforma multiusuario para coordinar la atención posterior a un terremoto. Varios usuarios registran y consultan zonas afectadas, necesidades, recursos, albergues, personas, mensajes entre familiares y reportes de mascotas, de forma concurrente y sin inconsistencias.
 
-**Repositorio:** _(completar con la URL)_
+**Repositorio:** _https://github.com/miguelAceballos2112/programacion3-proyecto-final-emergencias.git_
 
 ## Integrantes y roles
 
 | Integrante | Rol | Responsabilidad |
 |---|---|---|
-| _Nombre 1_ | Integrante 1 | Base del sistema: supervisión, persistencia, usuarios, permisos y zonas |
+| _Miguel Angel Ceballos Soler_ | Integrante 1 | Base del sistema: supervisión, persistencia, usuarios, permisos y zonas |
 | _Nombre 2_ | Integrante 2 | Logística: recursos, necesidades y albergues |
 | _Nombre 3_ | Integrante 3 | Personas, mensajes, mascotas, resumen e interfaz de comandos |
 
@@ -28,8 +28,6 @@ Simulación, en Elixir, de una plataforma multiusuario para coordinar la atenci�
 | Personas y mensajes | Integrante 3 | Pendiente |
 | Mascotas | Integrante 3 | Pendiente |
 | Resumen e interfaz de comandos | Integrante 3 | Pendiente |
-
-_Actualizar esta tabla a medida que cada integrante entregue su parte._
 
 ## Requisitos
 
