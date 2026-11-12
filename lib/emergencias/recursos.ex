@@ -39,6 +39,11 @@ defmodule Emergencias.Recursos do
     GenServer.call(__MODULE__, {:registrar_centro, codigo, nombre, tipo, zona})
   end
 
+  @doc "Registra el centro de apoyo de un albergue. Solo lo usa `Emergencias.Albergues`."
+  def registrar_centro_albergue(codigo, nombre, zona) do
+    GenServer.call(__MODULE__, {:registrar_centro_albergue, codigo, nombre, zona})
+  end
+
   @doc "Registra un recurso con su cantidad inicial en un centro (`register_resource`)."
   def registrar(codigo, categoria, cantidad, unidad, centro, nombre \\ nil) do
     GenServer.call(__MODULE__, {:registrar, codigo, categoria, cantidad, unidad, centro, nombre})
@@ -135,6 +140,14 @@ defmodule Emergencias.Recursos do
          {:ok, centro, nuevo_estado} <- agregar_centro(estado, codigo, nombre, tipo, zona) do
       {:reply, {:ok, centro}, nuevo_estado}
     else
+      {:error, razon} -> {:reply, {:error, razon}, estado}
+    end
+  end
+
+  @impl true
+  def handle_call({:registrar_centro_albergue, codigo, nombre, zona}, _from, estado) do
+    case agregar_centro(estado, codigo, nombre, :albergue, zona) do
+      {:ok, centro, nuevo_estado} -> {:reply, {:ok, centro}, nuevo_estado}
       {:error, razon} -> {:reply, {:error, razon}, estado}
     end
   end

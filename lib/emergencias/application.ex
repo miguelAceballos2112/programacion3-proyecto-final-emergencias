@@ -20,7 +20,8 @@ defmodule Emergencias.Application do
       Emergencias.Zonas,
       # Integrante 2: logística, en orden de dependencia (cada uno solo llama a los
       # que van antes)
-      Emergencias.Recursos
+      Emergencias.Recursos,
+      Emergencias.Albergues
       # Integrante 3: Emergencias.Personas, Emergencias.Mascotas
     ]
 
