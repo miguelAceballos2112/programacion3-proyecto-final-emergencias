@@ -5,6 +5,7 @@ defmodule Emergencias.Application do
   Al iniciar el proyecto, Elixir llama a `start/2`, que levanta el supervisor raíz
   con todos los procesos del sistema.
   - Integrante 1: base del sistema (sesiones, usuarios y zonas)
+  - Integrante 2: logística (recursos, albergues y necesidades)
   """
 
   use Application
@@ -16,8 +17,10 @@ defmodule Emergencias.Application do
       # Debe iniciar antes que Usuarios, que lo utiliza.
       {DynamicSupervisor, strategy: :one_for_one, name: Emergencias.SupervisorSesiones},
       Emergencias.Usuarios,
-      Emergencias.Zonas
-      # Integrante 2: Emergencias.Recursos, Emergencias.Necesidades, Emergencias.Albergues
+      Emergencias.Zonas,
+      # Integrante 2: logística, en orden de dependencia (cada uno solo llama a los
+      # que van antes)
+      Emergencias.Recursos
       # Integrante 3: Emergencias.Personas, Emergencias.Mascotas
     ]
 
