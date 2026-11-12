@@ -81,6 +81,21 @@ defmodule Emergencias.Necesidades do
   @doc "Necesidades cuyo destino es un albergue."
   def por_albergue(codigo), do: GenServer.call(__MODULE__, {:por_albergue, codigo})
 
+  @doc """
+  Recursos críticos (`critical_resources`): por zona y categoría, la demanda pendiente
+  es mayor que lo disponible en los centros de esa zona.
+  """
+  def recursos_criticos do
+    pendientes()
+    |> demanda_pendiente()
+    |> Enum.map(fn {{zona, categoria}, demanda} -> critico(zona, categoria, demanda) end)
+    |> Enum.filter(fn critico -> critico.faltante > 0 end)
+    |> Enum.sort_by(fn critico -> critico.faltante end, :desc)
+  end
+
+  @doc "Suma lo que falta por cubrir de cada necesidad, agrupado por `{zona, tipo}`."
+  def demanda_pendiente(necesidades), do: sumar_demanda(necesidades, %{})
+
   # ========== Callbacks del servidor ==========
 
   @impl true
@@ -291,6 +306,28 @@ defmodule Emergencias.Necesidades do
   defp coincide?(necesidad, "prioridad", valor), do: "#{necesidad.prioridad}" == valor
   defp coincide?(necesidad, "estado", valor), do: "#{necesidad.estado}" == valor
   defp coincide?(_necesidad, _campo, _valor), do: false
+
+  # Caso base: no quedan necesidades, se devuelve lo acumulado
+  defp sumar_demanda([], demanda), do: demanda
+
+  # Caso recursivo: se suma lo que le falta a la primera y se sigue con el resto
+  defp sumar_demanda([head | tail], demanda) do
+    clave = {head.zona, head.tipo}
+    faltante = Necesidad.faltante(head)
+    sumar_demanda(tail, Map.update(demanda, clave, faltante, fn actual -> actual + faltante end))
+  end
+
+  defp critico(zona, categoria, demanda) do
+    {:ok, disponible} = Recursos.disponibilidad(categoria, zona)
+
+    %{
+      zona: zona,
+      categoria: categoria,
+      demanda: demanda,
+      disponible: disponible,
+      faltante: demanda - disponible
+    }
+  end
 
   defp actualizar(estado, necesidad) do
     nuevo_estado = %{estado | necesidades: Map.put(estado.necesidades, necesidad.id, necesidad)}

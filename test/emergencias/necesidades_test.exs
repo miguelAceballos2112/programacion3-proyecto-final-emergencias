@@ -341,4 +341,31 @@ defmodule Emergencias.NecesidadesTest do
       assert disponible("agua", zona) in [20, 25]
     end
   end
+
+  describe "recursos críticos" do
+    test "la demanda pendiente de la zona supera lo disponible" do
+      zona = crear_zona()
+      abastecer(zona, "agua", 50)
+      necesidad("agua", 30, "critica", zona)
+      necesidad("agua", 50, "alta", zona)
+
+      critico = Enum.find(Necesidades.recursos_criticos(), fn critico -> critico.zona == zona end)
+      assert critico.categoria == :agua
+      assert critico.demanda == 80
+      assert critico.disponible == 50
+      assert critico.faltante == 30
+    end
+
+    test "demanda_pendiente agrupa lo que falta por zona y tipo" do
+      zona = crear_zona()
+      n1 = necesidad("agua", 30, "critica", zona)
+      n2 = necesidad("agua", 50, "alta", zona)
+      n3 = necesidad("alimentos", 7, "baja", zona)
+
+      assert Necesidades.demanda_pendiente([n1, n2, n3]) == %{
+               {zona, :agua} => 80,
+               {zona, :alimentos} => 7
+             }
+    end
+  end
 end
