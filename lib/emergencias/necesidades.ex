@@ -41,6 +41,23 @@ defmodule Emergencias.Necesidades do
     )
   end
 
+  @doc "Asigna recursos de una categoría a una necesidad (`assign_resource`)."
+  def asignar_recurso(id, categoria, cantidad) do
+    GenServer.call(__MODULE__, {:asignar, id, categoria, cantidad})
+  end
+
+  @doc """
+  Cambia el estado de una necesidad respetando las transiciones válidas
+  (`update_need_status`). Si pasa a cancelada, devuelve lo reservado como `cancelar/1`.
+  """
+  def cambiar_estado(id, estado), do: GenServer.call(__MODULE__, {:cambiar_estado, id, estado})
+
+  @doc """
+  Cancela una necesidad (`cancel_need`). Si estaba pendiente o asignada, devuelve a los
+  centros lo que se le había reservado; si estaba en atención, los recursos ya se usaron.
+  """
+  def cancelar(id), do: cambiar_estado(id, :cancelada)
+
   @doc "Busca una necesidad por id."
   def consultar(id), do: GenServer.call(__MODULE__, {:consultar, id})
 
@@ -54,6 +71,12 @@ defmodule Emergencias.Necesidades do
   `[zona: "centro", prioridad: "critica"]`.
   """
   def listar(filtros \\ []), do: GenServer.call(__MODULE__, {:listar, Enum.to_list(filtros)})
+
+  @doc "Necesidades abiertas (pendientes, asignadas o en atención), por prioridad (`pending_needs`)."
+  def pendientes, do: GenServer.call(__MODULE__, :pendientes)
+
+  @doc "La necesidad sin atender más urgente, de una zona o de todas (`next_need`)."
+  def siguiente(zona \\ nil), do: GenServer.call(__MODULE__, {:siguiente, zona})
 
   @doc "Necesidades cuyo destino es un albergue."
   def por_albergue(codigo), do: GenServer.call(__MODULE__, {:por_albergue, codigo})
@@ -108,6 +131,36 @@ defmodule Emergencias.Necesidades do
   end
 
   @impl true
+  def handle_call({:asignar, id, categoria, cantidad}, _from, estado) do
+    with {:ok, necesidad} <- buscar(estado, id),
+         {:ok, categoria} <-
+           Validaciones.opcion(categoria, Recurso.categorias(), :categoria_invalida),
+         :ok <- misma_categoria(necesidad, categoria),
+         :ok <- Validaciones.entero_positivo(cantidad, :cantidad_invalida),
+         :ok <- Necesidad.validar_asignacion(necesidad, cantidad),
+         {:ok, _tomas} <- Recursos.reservar(categoria, cantidad, necesidad.zona, necesidad.id) do
+      actualizada = Necesidad.registrar_asignacion(necesidad, cantidad)
+      {:reply, {:ok, actualizada}, actualizar(estado, actualizada)}
+    else
+      {:error, razon} -> {:reply, {:error, razon}, estado}
+    end
+  end
+
+  # Orden seguro: validar la transición, devolver en Recursos (si se cancela) y solo
+  # entonces cambiar el estado propio y guardar
+  @impl true
+  def handle_call({:cambiar_estado, id, nuevo}, _from, estado) do
+    with {:ok, necesidad} <- buscar(estado, id),
+         {:ok, nuevo} <- Validaciones.opcion(nuevo, Necesidad.estados(), :estado_invalido),
+         {:ok, actualizada} <- Necesidad.cambiar_estado(necesidad, nuevo),
+         :ok <- devolver_si_cancela(necesidad, nuevo) do
+      {:reply, {:ok, actualizada}, actualizar(estado, actualizada)}
+    else
+      {:error, razon} -> {:reply, {:error, razon}, estado}
+    end
+  end
+
+  @impl true
   def handle_call({:consultar, id}, _from, estado), do: {:reply, buscar(estado, id), estado}
 
   @impl true
@@ -122,6 +175,28 @@ defmodule Emergencias.Necesidades do
   def handle_call({:listar, filtros}, _from, estado) do
     lista = estado.necesidades |> Map.values() |> filtrar(filtros) |> Prioridad.ordenar()
     {:reply, lista, estado}
+  end
+
+  @impl true
+  def handle_call(:pendientes, _from, estado) do
+    lista =
+      estado.necesidades
+      |> Map.values()
+      |> Enum.filter(fn necesidad -> Necesidad.abierta?(necesidad) end)
+      |> Prioridad.ordenar()
+
+    {:reply, lista, estado}
+  end
+
+  @impl true
+  def handle_call({:siguiente, zona}, _from, estado) do
+    candidatas =
+      estado.necesidades
+      |> Map.values()
+      |> Enum.filter(fn necesidad -> necesidad.estado in [:pendiente, :asignada] end)
+      |> Enum.filter(fn necesidad -> de_la_zona?(necesidad, zona) end)
+
+    {:reply, Prioridad.mas_urgente(candidatas), estado}
   end
 
   @impl true
@@ -184,6 +259,23 @@ defmodule Emergencias.Necesidades do
   defp existe(true, _error), do: :ok
   defp existe(false, error), do: {:error, error}
 
+  defp misma_categoria(necesidad, categoria) do
+    if necesidad.tipo == categoria, do: :ok, else: {:error, :categoria_no_corresponde}
+  end
+
+  defp devolver_si_cancela(necesidad, :cancelada) do
+    if Necesidad.devuelve_al_cancelar?(necesidad) do
+      {:ok, _lotes} = Recursos.devolver(necesidad.id)
+    end
+
+    :ok
+  end
+
+  defp devolver_si_cancela(_necesidad, _nuevo), do: :ok
+
+  defp de_la_zona?(_necesidad, nil), do: true
+  defp de_la_zona?(necesidad, zona), do: necesidad.zona == zona
+
   # Caso base: no quedan filtros por aplicar
   defp filtrar(necesidades, []), do: necesidades
 
@@ -199,6 +291,12 @@ defmodule Emergencias.Necesidades do
   defp coincide?(necesidad, "prioridad", valor), do: "#{necesidad.prioridad}" == valor
   defp coincide?(necesidad, "estado", valor), do: "#{necesidad.estado}" == valor
   defp coincide?(_necesidad, _campo, _valor), do: false
+
+  defp actualizar(estado, necesidad) do
+    nuevo_estado = %{estado | necesidades: Map.put(estado.necesidades, necesidad.id, necesidad)}
+    guardar(nuevo_estado)
+    nuevo_estado
+  end
 
   defp cargar do
     @archivo
