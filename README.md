@@ -22,9 +22,10 @@ Simulación, en Elixir, de una plataforma multiusuario para coordinar la atenci�
 | Persistencia en texto plano y validaciones | Integrante 1 | Listo |
 | Usuarios, conexión y permisos | Integrante 1 | Listo |
 | Zonas, sectores y puntos de atención | Integrante 1 | Listo |
-| Recursos | Integrante 2 | Pendiente |
-| Necesidades | Integrante 2 | Pendiente |
-| Albergues | Integrante 2 | Pendiente |
+| Recursos y centros de apoyo | Integrante 2 | Listo |
+| Necesidades | Integrante 2 | Listo |
+| Albergues | Integrante 2 | Listo (el ingreso y la salida necesitan `Personas`) |
+| Comandos de logística (`comandos/logistica.ex`) | Integrante 2 | Listo; falta conectarlos al despachador |
 | Personas y mensajes | Integrante 3 | Pendiente |
 | Mascotas | Integrante 3 | Pendiente |
 | Resumen e interfaz de comandos | Integrante 3 | Pendiente |
@@ -66,9 +67,9 @@ Emergencias.Supervisor (:one_for_one)
 ├── Emergencias.SupervisorSesiones (DynamicSupervisor) -> una sesión por usuario conectado
 ├── Emergencias.Usuarios    (GenServer)
 ├── Emergencias.Zonas       (GenServer)
-├── Emergencias.Recursos    (GenServer)  pendiente
-├── Emergencias.Necesidades (GenServer)  pendiente
-├── Emergencias.Albergues   (GenServer)  pendiente
+├── Emergencias.Recursos    (GenServer)
+├── Emergencias.Albergues   (GenServer)
+├── Emergencias.Necesidades (GenServer)
 ├── Emergencias.Personas    (GenServer)  pendiente
 └── Emergencias.Mascotas    (GenServer)  pendiente
 ```
@@ -91,9 +92,10 @@ Archivos de texto plano en la carpeta `datos/` (se crea al ejecutar; no se versi
 | `usuarios.txt` | Usuarios (la contraseña se guarda cifrada con SHA-256) | Listo |
 | `actividad.txt` | Registro de actividad de cada usuario | Listo |
 | `zonas.txt` | Zonas, sectores y puntos de atención | Listo |
-| `recursos.txt`, `movimientos.txt` | Inventario e historial de movimientos | Pendiente |
-| `necesidades.txt` | Necesidades puntuales | Pendiente |
-| `albergues.txt` | Albergues y ocupantes | Pendiente |
+| `centros.txt` | Centros de apoyo con su tipo y su zona | Listo |
+| `recursos.txt`, `movimientos.txt` | Inventario por centro e historial de movimientos (las reservas llevan el id de la necesidad) | Listo |
+| `necesidades.txt` | Necesidades puntuales con su destino | Listo |
+| `albergues.txt` | Albergues, ocupación inicial y ocupantes | Listo |
 | `personas.txt`, `historial_personas.txt`, `mensajes.txt` | Personas, historial de estados y mensajes | Pendiente |
 | `mascotas.txt` | Reportes de mascotas | Pendiente |
 
@@ -121,12 +123,14 @@ Tipos de usuario: `ciudadano`, `voluntario`, `coordinador` y `administrador`. Co
 |---|---|---|
 | `connect`, `disconnect` | `Usuarios` | Función lista; falta la interfaz de comandos |
 | `register_zone` | `Zonas` | Función lista; falta la interfaz de comandos |
-| `register_resource`, `list_resources`, `transfer_resource`, `assign_resource` | `Recursos`, `Necesidades` | Pendiente |
-| `register_need`, `list_needs`, `pending_needs`, `critical_resources` | `Necesidades` | Pendiente |
-| `register_shelter`, `check_shelter`, `register_entry`, `register_exit` | `Albergues` | Pendiente |
+| `register_resource`, `list_resources`, `transfer_resource`, `assign_resource` | `Recursos`, `Necesidades` | Listo en `Comandos.Logistica`; falta conectarlo al despachador |
+| `register_need`, `list_needs`, `pending_needs`, `critical_resources` | `Necesidades` | Listo en `Comandos.Logistica`; falta conectarlo al despachador |
+| `register_shelter`, `check_shelter`, `register_entry`, `register_exit` | `Albergues` | Listo en `Comandos.Logistica`; falta conectarlo al despachador |
 | `report_person`, `find_person`, `send_family_message`, `list_family_messages` | `Personas` | Pendiente |
 | `report_pet`, `match_pets` | `Mascotas` | Pendiente |
 | `summary` | `Reportes` | Pendiente |
+
+Los 20 comandos de logística (los cuatro de arriba y los propios, como `register_center`, `add_stock` o `cancel_need`) y su función están en `docs/rol2-logistica.md`.
 
 ## Estructuras de datos y recursividad
 
@@ -136,7 +140,22 @@ Tipos de usuario: `ciudadano`, `voluntario`, `coordinador` y `administrador`. Co
 - **Structs:** `Usuario`, `Zona`, `Sector` y `PuntoAtencion`, con campos obligatorios.
 - **Funciones recursivas propias** (Integrante 1): `total_sectores/1`, `total_puntos/1`, `contar_puntos/1`, `sectores_por_nivel/2` (con acumulador), `totales_por_sector/1` y las funciones que recorren la jerarquía de zonas al escribir `zonas.txt`.
 
-_Agregar aquí las estructuras y funciones recursivas de los otros integrantes._
+- **Logística (Integrante 2):**
+  - Mapas `%{centro => cantidad}` para el inventario de cada recurso.
+  - `MapSet` con los documentos de los ocupantes de cada albergue: nadie queda dos veces.
+  - Tuplas `{codigo, centro, cantidad}` para las partes de una reserva y `{tipo, codigo}` para el destino de una necesidad.
+  - Structs `Centro`, `Recurso`, `Movimiento`, `Albergue` y `Necesidad`.
+- **Funciones recursivas propias** (Integrante 2):
+  - `Reparto.total/1` y `tomar/3`: reparten una reserva entre centros.
+  - `Recursos.aplicar_tomas/4`, `aplicar_devoluciones/4` y `punto_en_sectores?/2`.
+  - `Recurso.sumar/1`.
+  - `Prioridad.ordenar/1` (ordenamiento por inserción) y `mas_urgente/1`.
+  - `Necesidades.sumar_demanda/2` (con acumulador) y `filtrar/2`.
+  - `Albergue.ordenar_por_ocupacion/1`.
+  - `Validaciones.buscar_opcion/3`.
+  - `Comandos.Logistica.opcion/2` y `filtros/1`.
+
+_Agregar aquí las estructuras y funciones recursivas del Integrante 3._
 
 ## Validaciones y manejo de errores
 
@@ -145,6 +164,10 @@ _Agregar aquí las estructuras y funciones recursivas de los otros integrantes._
 - Los textos no pueden estar vacíos ni contener `;`.
 - Una zona, un sector o un punto solo se registran si existe lo que los contiene (`:zona_no_existe`, `:sector_no_existe`).
 - Un usuario solo puede tener una sesión abierta (`:ya_conectado`).
+- El inventario nunca queda negativo y una reserva que no alcanza no toma nada (`:stock_insuficiente`).
+- Un albergue no supera su capacidad (`:albergue_lleno`) y una persona no está en dos albergues (`:ya_esta_en_un_albergue`).
+- Una necesidad solo cambia de estado por transiciones válidas (`:transicion_invalida`). Una atendida o cancelada no vuelve a recibir recursos (`:necesidad_cerrada`).
+- El destino de una necesidad y el punto de un centro de tipo punto de atención deben existir (`:punto_no_existe`, `:albergue_no_existe`, `:persona_no_existe`, `:familia_no_existe`).
 - Cada `handle_call` valida antes de modificar: si algo falla, responde el error y el estado no cambia.
 
 ## Pruebas
@@ -153,17 +176,37 @@ _Agregar aquí las estructuras y funciones recursivas de los otros integrantes._
 mix test
 ```
 
-Con la parte del Integrante 1 se obtienen **12 doctests y 52 pruebas, 0 fallos**. Incluyen casos válidos, inválidos y límite, conexiones simultáneas de varios usuarios y la recuperación de un servidor que falla (el supervisor lo reinicia y recupera sus datos desde el archivo). Las pruebas guardan sus datos en una carpeta temporal, sin tocar `datos/`.
+Con las partes de los integrantes 1 y 2 se obtienen **19 doctests y 127 pruebas, 0 fallos**. Incluyen:
+
+- casos válidos, inválidos y límite;
+- conexiones simultáneas de varios usuarios;
+- reservas, registros e ingresos a albergues simultáneos;
+- devoluciones repetidas;
+- la recuperación de un servidor que falla: el supervisor lo reinicia y el servidor recupera sus datos desde el archivo.
+
+Las pruebas guardan sus datos en una carpeta temporal, sin tocar `datos/`.
+
+Otras 7 pruebas usan `Emergencias.Personas` (ingreso y salida de albergues y destinos de tipo persona o familia). Mientras ese módulo no exista, `test_helper.exs` las omite, `mix test` muestra "7 excluded" y el compilador avisa que las funciones de `Personas` todavía no existen.
 
 _Actualizar el conteo cuando los otros integrantes agreguen sus pruebas._
 
 ## Demostración del conflicto concurrente
 
-_(Completar cuando el Integrante 2 entregue `escenarios/conflicto_concurrente.exs`: con 50 litros de agua disponibles, dos solicitudes simultáneas de 30 y 25 litros no pueden confirmarse a la vez.)_
+```
+mix run escenarios/conflicto_concurrente.exs
+```
+
+El escenario muestra tres casos:
+
+1. Hay 50 litros de agua y Laura (30 litros) y Pedro (25 litros) piden al mismo tiempo. Se confirma la solicitud que llega primero y la otra se rechaza con `:stock_insuficiente`. Nunca se asignan 55 litros.
+2. Hay diez solicitudes simultáneas de 10 litros sobre 50. Se confirman exactamente 5 y el inventario termina en 0.
+3. Se cancela la necesidad que recibió el agua y los litros vuelven al centro de acopio.
+
+Funciona porque `Recursos` decide cada reserva dentro de un `handle_call`: la verificación y el descuento ocurren en el mismo mensaje. El escenario usa una carpeta de datos temporal.
 
 ## Diagramas, informe y video
 
 - Arquitectura de módulos y árbol OTP: _(enlace)_
 - Modelo de datos: _(enlace)_
-- Diagrama de secuencia: _(enlace)_
+- Diagrama de secuencia del conflicto concurrente: `docs/diagramas/secuencia_conflicto.png` (fuente Mermaid en `docs/diagramas/secuencia_conflicto.md`)
 - Video de demostración: _(enlace)_
