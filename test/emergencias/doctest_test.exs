@@ -7,4 +7,5 @@ defmodule Emergencias.DoctestTest do
   doctest Emergencias.Permisos
   doctest Emergencias.Usuarios.Usuario
   doctest Emergencias.Zonas.Zona
+  doctest Emergencias.Recursos.Reparto
 end
