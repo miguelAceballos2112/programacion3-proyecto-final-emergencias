@@ -21,7 +21,8 @@ defmodule Emergencias.Application do
       # Integrante 2: logística, en orden de dependencia (cada uno solo llama a los
       # que van antes)
       Emergencias.Recursos,
-      Emergencias.Albergues
+      Emergencias.Albergues,
+      Emergencias.Necesidades
       # Integrante 3: Emergencias.Personas, Emergencias.Mascotas
     ]
 

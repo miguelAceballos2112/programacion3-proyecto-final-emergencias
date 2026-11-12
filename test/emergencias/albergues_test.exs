@@ -2,6 +2,7 @@ defmodule Emergencias.AlberguesTest do
   use ExUnit.Case
 
   alias Emergencias.Albergues
+  alias Emergencias.Necesidades
   alias Emergencias.Personas
   alias Emergencias.Recursos
   alias Emergencias.Zonas
@@ -184,10 +185,22 @@ defmodule Emergencias.AlberguesTest do
       {:ok, _recurso} = Recursos.registrar(recurso, "agua", 200, "litros", centro)
       {:ok, _recurso} = Recursos.transferir(recurso, centro, albergue, 30)
 
+      {:ok, necesidad} =
+        Necesidades.registrar(
+          "alimentos",
+          40,
+          "alta",
+          zona,
+          "Cena",
+          "pedro",
+          {:albergue, albergue}
+        )
+
       assert {:ok, estado} = Albergues.consultar(albergue)
       assert estado.cupos == 20
       assert estado.porcentaje == 0.0
       assert [%{codigo: ^recurso, cantidad: 30}] = estado.recursos
+      assert Enum.map(estado.necesidades, fn asociada -> asociada.id end) == [necesidad.id]
     end
   end
 end

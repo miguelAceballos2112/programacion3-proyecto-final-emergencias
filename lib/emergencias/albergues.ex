@@ -14,6 +14,7 @@ defmodule Emergencias.Albergues do
   use GenServer
 
   alias Emergencias.Albergues.Albergue
+  alias Emergencias.Necesidades
   alias Emergencias.Persistencia
   alias Emergencias.Personas
   alias Emergencias.Recursos
@@ -80,7 +81,8 @@ defmodule Emergencias.Albergues do
            ocupacion: Albergue.ocupacion(albergue),
            cupos: Albergue.cupos(albergue),
            porcentaje: Albergue.porcentaje(albergue),
-           recursos: Recursos.por_centro(albergue.codigo)
+           recursos: Recursos.por_centro(albergue.codigo),
+           necesidades: Necesidades.por_albergue(albergue.codigo)
          }}
 
       {:error, razon} ->
