@@ -16,6 +16,7 @@ defmodule Emergencias.Recursos do
   alias Emergencias.Recursos.Centro
   alias Emergencias.Recursos.Movimiento
   alias Emergencias.Recursos.Recurso
+  alias Emergencias.Recursos.Reparto
   alias Emergencias.Validaciones
   alias Emergencias.Zonas
   alias Emergencias.Zonas.Zona
@@ -58,6 +59,23 @@ defmodule Emergencias.Recursos do
     GenServer.call(__MODULE__, {:transferir, codigo, origen, destino, cantidad})
   end
 
+  @doc """
+  Reserva `cantidad` unidades de una categoría en los centros de una zona, para la
+  necesidad `referencia`.
+
+  Devuelve `{:ok, tomas}` con lo que se tomó de cada centro, o
+  `{:error, :stock_insuficiente}` sin tocar el inventario.
+  """
+  def reservar(categoria, cantidad, zona, referencia) do
+    GenServer.call(__MODULE__, {:reservar, categoria, cantidad, zona, referencia})
+  end
+
+  @doc """
+  Devuelve a cada centro lo que se reservó para la necesidad `referencia` y todavía no
+  se ha devuelto. Retorna `{:ok, devoluciones}`; una segunda devolución no repone nada.
+  """
+  def devolver(referencia), do: GenServer.call(__MODULE__, {:devolver, referencia})
+
   @doc "Busca un recurso por código."
   def consultar(codigo), do: GenServer.call(__MODULE__, {:consultar, codigo})
 
@@ -72,6 +90,11 @@ defmodule Emergencias.Recursos do
 
   @doc "Zona de un centro de apoyo, para la regla de zona del coordinador."
   def zona_de(codigo), do: GenServer.call(__MODULE__, {:zona_de, codigo})
+
+  @doc "Cantidad disponible de una categoría en una zona (o en todas si la zona es `nil`)."
+  def disponibilidad(categoria, zona \\ nil) do
+    GenServer.call(__MODULE__, {:disponibilidad, categoria, zona})
+  end
 
   @doc "Recursos que hay en un centro (por ejemplo, en un albergue)."
   def por_centro(centro), do: GenServer.call(__MODULE__, {:por_centro, centro})
@@ -218,6 +241,27 @@ defmodule Emergencias.Recursos do
   end
 
   @impl true
+  def handle_call({:reservar, categoria, cantidad, zona, referencia}, _from, estado) do
+    with {:ok, categoria} <-
+           Validaciones.opcion(categoria, Recurso.categorias(), :categoria_invalida),
+         :ok <- Validaciones.entero_positivo(cantidad, :cantidad_invalida),
+         :ok <- Validaciones.texto(referencia, :referencia_invalida),
+         {:ok, tomas} <- Reparto.repartir(fuentes(estado, categoria, zona), cantidad) do
+      {recursos, movimientos} = aplicar_tomas(estado.recursos, tomas, referencia, [])
+      {:reply, {:ok, tomas}, confirmar(estado, recursos, movimientos)}
+    else
+      {:error, razon} -> {:reply, {:error, razon}, estado}
+    end
+  end
+
+  @impl true
+  def handle_call({:devolver, referencia}, _from, estado) do
+    lotes = por_devolver(estado.movimientos, referencia)
+    {recursos, movimientos} = aplicar_devoluciones(estado.recursos, lotes, referencia, [])
+    {:reply, {:ok, lotes}, confirmar(estado, recursos, movimientos)}
+  end
+
+  @impl true
   def handle_call({:consultar, codigo}, _from, estado) do
     {:reply, buscar_recurso(estado, codigo), estado}
   end
@@ -243,6 +287,14 @@ defmodule Emergencias.Recursos do
   def handle_call({:zona_de, codigo}, _from, estado) do
     case buscar_centro(estado, codigo) do
       {:ok, centro} -> {:reply, {:ok, centro.zona}, estado}
+      {:error, razon} -> {:reply, {:error, razon}, estado}
+    end
+  end
+
+  @impl true
+  def handle_call({:disponibilidad, categoria, zona}, _from, estado) do
+    case Validaciones.opcion(categoria, Recurso.categorias(), :categoria_invalida) do
+      {:ok, categoria} -> {:reply, {:ok, Reparto.total(fuentes(estado, categoria, zona))}, estado}
       {:error, razon} -> {:reply, {:error, razon}, estado}
     end
   end
@@ -342,6 +394,99 @@ defmodule Emergencias.Recursos do
       :ok -> {:ok, nombre}
       {:error, razon} -> {:error, razon}
     end
+  end
+
+  # Existencias de una categoría en los centros de la zona, de la más grande a la más
+  # pequeña
+  defp fuentes(estado, categoria, zona) do
+    estado.recursos
+    |> Map.values()
+    |> Enum.filter(fn recurso -> recurso.categoria == categoria end)
+    |> Enum.flat_map(fn recurso ->
+      Enum.map(recurso.existencias, fn {centro, cantidad} ->
+        {recurso.codigo, centro, cantidad}
+      end)
+    end)
+    |> Enum.filter(fn {_codigo, _centro, cantidad} -> cantidad > 0 end)
+    |> Enum.filter(fn {_codigo, centro, _cantidad} -> en_zona?(estado, centro, zona) end)
+    |> Enum.sort_by(fn {_codigo, _centro, cantidad} -> cantidad end, :desc)
+  end
+
+  defp en_zona?(_estado, _centro, nil), do: true
+  defp en_zona?(estado, centro, zona), do: Map.get(estado.centros, centro).zona == zona
+
+  # Caso base: no quedan tomas por aplicar
+  defp aplicar_tomas(recursos, [], _referencia, movimientos) do
+    {recursos, Enum.reverse(movimientos)}
+  end
+
+  # Caso recursivo: descuenta la primera toma y sigue con las demás
+  defp aplicar_tomas(recursos, [{codigo, centro, cantidad} | tail], referencia, movimientos) do
+    {:ok, recurso} = Recurso.retirar(Map.get(recursos, codigo), centro, cantidad)
+
+    movimiento =
+      Movimiento.crear(
+        :reserva,
+        codigo,
+        centro,
+        "",
+        cantidad,
+        referencia,
+        "Reserva para #{referencia}"
+      )
+
+    aplicar_tomas(Map.put(recursos, codigo, recurso), tail, referencia, [movimiento | movimientos])
+  end
+
+  # Lo reservado para la necesidad menos lo ya devuelto, por recurso y centro
+  defp por_devolver(movimientos, referencia) do
+    movimientos
+    |> Enum.filter(fn movimiento -> movimiento.referencia == referencia end)
+    |> Enum.reduce(%{}, fn movimiento, saldos -> sumar_lote(saldos, movimiento) end)
+    |> Enum.filter(fn {_lote, cantidad} -> cantidad > 0 end)
+    |> Enum.map(fn {{codigo, centro}, cantidad} -> {codigo, centro, cantidad} end)
+  end
+
+  defp sumar_lote(saldos, %Movimiento{tipo: :reserva} = movimiento) do
+    lote = {movimiento.codigo, movimiento.origen}
+    Map.update(saldos, lote, movimiento.cantidad, fn actual -> actual + movimiento.cantidad end)
+  end
+
+  defp sumar_lote(saldos, %Movimiento{tipo: :devolucion} = movimiento) do
+    lote = {movimiento.codigo, movimiento.destino}
+    Map.update(saldos, lote, -movimiento.cantidad, fn actual -> actual - movimiento.cantidad end)
+  end
+
+  defp sumar_lote(saldos, _movimiento), do: saldos
+
+  # Caso base: no quedan lotes por devolver
+  defp aplicar_devoluciones(recursos, [], _referencia, movimientos) do
+    {recursos, Enum.reverse(movimientos)}
+  end
+
+  # Caso recursivo: repone el primer lote en su centro y sigue con los demás
+  defp aplicar_devoluciones(
+         recursos,
+         [{codigo, centro, cantidad} | tail],
+         referencia,
+         movimientos
+       ) do
+    recurso = Recurso.agregar(Map.get(recursos, codigo), centro, cantidad)
+
+    movimiento =
+      Movimiento.crear(
+        :devolucion,
+        codigo,
+        "",
+        centro,
+        cantidad,
+        referencia,
+        "Devolución de #{referencia}"
+      )
+
+    aplicar_devoluciones(Map.put(recursos, codigo, recurso), tail, referencia, [
+      movimiento | movimientos
+    ])
   end
 
   defp confirmar(estado, recursos, movimientos) do

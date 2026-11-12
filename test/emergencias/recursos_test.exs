@@ -53,6 +53,9 @@ defmodule Emergencias.RecursosTest do
     end
   end
 
+  defp confirmada?({:ok, _tomas}), do: true
+  defp confirmada?(_resultado), do: false
+
   # ========== Pruebas ==========
 
   describe "centros de apoyo" do
@@ -191,7 +194,97 @@ defmodule Emergencias.RecursosTest do
     end
   end
 
+  describe "reservas y devoluciones" do
+    test "disponibilidad por categoría y zona" do
+      zona_a = crear_zona()
+      zona_b = crear_zona()
+      crear_recurso("medicamentos", 40, crear_centro(zona_a))
+      crear_recurso("medicamentos", 15, crear_centro(zona_a))
+      crear_recurso("medicamentos", 99, crear_centro(zona_b))
+
+      assert Recursos.disponibilidad("medicamentos", zona_a) == {:ok, 55}
+      assert Recursos.disponibilidad("medicamentos", zona_b) == {:ok, 99}
+      assert Recursos.disponibilidad("refugio", zona_a) == {:ok, 0}
+      assert Recursos.disponibilidad("gasolina", zona_a) == {:error, :categoria_invalida}
+    end
+
+    test "una reserva toma de varios centros de la zona, empezando por el que más tiene" do
+      zona = crear_zona()
+      grande = crear_centro(zona)
+      pequeno = crear_centro(zona)
+      r1 = crear_recurso("agua", 50, grande)
+      r2 = crear_recurso("agua", 30, pequeno)
+      otra_zona = crear_recurso("agua", 500, crear_centro(crear_zona()))
+
+      assert Recursos.reservar("agua", 60, zona, "N-prueba") ==
+               {:ok, [{r1, grande, 50}, {r2, pequeno, 10}]}
+
+      assert total(r1) == 0
+      assert total(r2) == 20
+      assert total(otra_zona) == 500
+      assert tipos_de_movimiento(r1) == [:registro, :reserva]
+    end
+
+    test "si entre todos los centros de la zona no alcanza, no se toma nada" do
+      zona = crear_zona()
+      r1 = crear_recurso("agua", 50, crear_centro(zona))
+      r2 = crear_recurso("agua", 30, crear_centro(zona))
+
+      assert Recursos.reservar("agua", 81, zona, "N-prueba") == {:error, :stock_insuficiente}
+      assert total(r1) == 50
+      assert total(r2) == 30
+    end
+
+    test "devolver repone cada lote en su centro y una segunda devolución no repone nada" do
+      zona = crear_zona()
+      grande = crear_centro(zona)
+      pequeno = crear_centro(zona)
+      r1 = crear_recurso("agua", 50, grande)
+      r2 = crear_recurso("agua", 30, pequeno)
+      necesidad = unico("N")
+      {:ok, _tomas} = Recursos.reservar("agua", 60, zona, necesidad)
+
+      assert {:ok, lotes} = Recursos.devolver(necesidad)
+      assert Enum.sort(lotes) == Enum.sort([{r1, grande, 50}, {r2, pequeno, 10}])
+      assert total(r1) == 50
+      assert total(r2) == 30
+
+      assert Recursos.devolver(necesidad) == {:ok, []}
+      assert total(r1) == 50
+      assert tipos_de_movimiento(r1) == [:registro, :reserva, :devolucion]
+    end
+
+    test "solo se devuelve lo reservado para esa necesidad" do
+      zona = crear_zona()
+      codigo = crear_recurso("alimentos", 100, crear_centro(zona))
+      {:ok, _tomas} = Recursos.reservar("alimentos", 30, zona, "N-una")
+      {:ok, _tomas} = Recursos.reservar("alimentos", 20, zona, "N-otra")
+
+      {:ok, _lotes} = Recursos.devolver("N-una")
+      assert total(codigo) == 80
+    end
+  end
+
   describe "concurrencia y tolerancia a fallos" do
+    test "10 solicitudes simultáneas de 10 unidades sobre 50: exactamente 5 se confirman" do
+      zona = crear_zona()
+      codigo = crear_recurso("agua", 50, crear_centro(zona))
+
+      resultados =
+        1..10
+        |> Enum.map(fn numero ->
+          Task.async(fn -> Recursos.reservar("agua", 10, zona, "tarea #{numero}") end)
+        end)
+        |> Enum.map(fn tarea -> Task.await(tarea) end)
+
+      assert Enum.count(resultados, fn resultado -> confirmada?(resultado) end) == 5
+
+      assert Enum.count(resultados, fn resultado -> resultado == {:error, :stock_insuficiente} end) ==
+               5
+
+      assert total(codigo) == 0
+    end
+
     test "registros simultáneos con el mismo código: solo uno se guarda" do
       centro = crear_centro(crear_zona())
       codigo = unico("R")
