@@ -11,7 +11,7 @@ Simulación, en Elixir, de una plataforma multiusuario para coordinar la atenci�
 | Integrante | Rol | Responsabilidad |
 |---|---|---|
 | _Miguel Angel Ceballos Soler_ | Integrante 1 | Base del sistema: supervisión, persistencia, usuarios, permisos y zonas |
-| _Nombre 2_ | Integrante 2 | Logística: recursos, necesidades y albergues |
+| _Victor Manuel Bolaños Guzman_ | Integrante 2 | Logística: recursos, necesidades y albergues |
 | _Nombre 3_ | Integrante 3 | Personas, mensajes, mascotas, resumen e interfaz de comandos |
 
 ## Estado del proyecto
