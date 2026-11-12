@@ -29,6 +29,30 @@ defmodule Emergencias.RecursosTest do
     codigo
   end
 
+  defp total(codigo) do
+    {:ok, recurso} = Recursos.consultar(codigo)
+    Recurso.total(recurso)
+  end
+
+  defp tipos_de_movimiento(codigo) do
+    Enum.map(Recursos.historial(codigo), fn movimiento -> movimiento.tipo end)
+  end
+
+  # Espera, consultando cada 10 ms, a que el supervisor inicie un proceso nuevo
+  defp esperar_reinicio(nombre, anterior, intentos \\ 100)
+  defp esperar_reinicio(_nombre, _anterior, 0), do: :sin_reinicio
+
+  defp esperar_reinicio(nombre, anterior, intentos) do
+    actual = Process.whereis(nombre)
+
+    if actual == nil or actual == anterior do
+      :timer.sleep(10)
+      esperar_reinicio(nombre, anterior, intentos - 1)
+    else
+      :ok
+    end
+  end
+
   # ========== Pruebas ==========
 
   describe "centros de apoyo" do
@@ -109,6 +133,64 @@ defmodule Emergencias.RecursosTest do
     end
   end
 
+  describe "entradas, salidas y transferencias" do
+    test "entradas y salidas de inventario; una salida nunca deja cantidades negativas" do
+      centro = crear_centro(crear_zona())
+      codigo = crear_recurso("alimentos", 20, centro)
+
+      assert {:ok, _recurso} = Recursos.entrada(codigo, centro, 30)
+      assert {:ok, _recurso} = Recursos.salida(codigo, centro, 15)
+      assert total(codigo) == 35
+
+      assert Recursos.salida(codigo, centro, 36) == {:error, :stock_insuficiente}
+      assert Recursos.entrada(codigo, centro, 0) == {:error, :cantidad_invalida}
+      assert total(codigo) == 35
+    end
+
+    test "transferencia entre centros: resta en el origen y suma en el destino" do
+      zona = crear_zona()
+      origen = crear_centro(zona)
+      destino = crear_centro(zona)
+      codigo = crear_recurso("agua", 200, origen)
+
+      assert {:ok, recurso} = Recursos.transferir(codigo, origen, destino, 30)
+      assert Recurso.disponible(recurso, origen) == 170
+      assert Recurso.disponible(recurso, destino) == 30
+      assert Recurso.total(recurso) == 200
+      assert [%{codigo: ^codigo, cantidad: 30}] = Recursos.por_centro(destino)
+    end
+
+    test "una transferencia inválida no cambia nada" do
+      zona = crear_zona()
+      origen = crear_centro(zona)
+      destino = crear_centro(zona)
+      codigo = crear_recurso("agua", 200, origen)
+
+      assert Recursos.transferir(codigo, origen, destino, 201) == {:error, :stock_insuficiente}
+      assert Recursos.transferir(codigo, origen, origen, 10) == {:error, :mismo_centro}
+      assert Recursos.transferir(codigo, origen, "nada", 10) == {:error, :centro_no_existe}
+
+      {:ok, recurso} = Recursos.consultar(codigo)
+      assert Recurso.disponible(recurso, origen) == 200
+      assert Recurso.disponible(recurso, destino) == 0
+    end
+
+    test "conserva el historial de movimientos en orden" do
+      zona = crear_zona()
+      origen = crear_centro(zona)
+      destino = crear_centro(zona)
+      codigo = crear_recurso("medicamentos", 50, origen)
+
+      Recursos.entrada(codigo, origen, 10)
+      Recursos.salida(codigo, origen, 5)
+      Recursos.transferir(codigo, origen, destino, 20)
+      Recursos.salida(codigo, origen, 999)
+
+      assert tipos_de_movimiento(codigo) == [:registro, :entrada, :salida, :transferencia]
+      assert length(Recursos.historial()) >= 4
+    end
+  end
+
   describe "concurrencia y tolerancia a fallos" do
     test "registros simultáneos con el mismo código: solo uno se guarda" do
       centro = crear_centro(crear_zona())
@@ -122,6 +204,20 @@ defmodule Emergencias.RecursosTest do
         |> Enum.map(fn tarea -> Task.await(tarea) end)
 
       assert Enum.count(resultados, fn resultado -> resultado == {:error, :ya_existe} end) == 4
+    end
+
+    test "si el servidor falla, el supervisor lo reinicia y no se pierde el inventario" do
+      centro = crear_centro(crear_zona())
+      codigo = crear_recurso("refugio", 12, centro)
+      Recursos.salida(codigo, centro, 2)
+
+      anterior = Process.whereis(Recursos)
+      Process.exit(anterior, :kill)
+
+      assert esperar_reinicio(Recursos, anterior) == :ok
+      assert total(codigo) == 10
+      assert Recursos.existe_centro?(centro)
+      assert tipos_de_movimiento(codigo) == [:registro, :salida]
     end
   end
 end

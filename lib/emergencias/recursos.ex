@@ -43,6 +43,21 @@ defmodule Emergencias.Recursos do
     GenServer.call(__MODULE__, {:registrar, codigo, categoria, cantidad, unidad, centro, nombre})
   end
 
+  @doc "Entrada de inventario (`add_stock`): suma unidades de un recurso en un centro."
+  def entrada(codigo, centro, cantidad) do
+    GenServer.call(__MODULE__, {:entrada, codigo, centro, cantidad})
+  end
+
+  @doc "Salida de inventario (`remove_stock`): resta unidades de un recurso en un centro."
+  def salida(codigo, centro, cantidad) do
+    GenServer.call(__MODULE__, {:salida, codigo, centro, cantidad})
+  end
+
+  @doc "Mueve unidades de un centro a otro en una sola operación (`transfer_resource`)."
+  def transferir(codigo, origen, destino, cantidad) do
+    GenServer.call(__MODULE__, {:transferir, codigo, origen, destino, cantidad})
+  end
+
   @doc "Busca un recurso por código."
   def consultar(codigo), do: GenServer.call(__MODULE__, {:consultar, codigo})
 
@@ -57,6 +72,15 @@ defmodule Emergencias.Recursos do
 
   @doc "Zona de un centro de apoyo, para la regla de zona del coordinador."
   def zona_de(codigo), do: GenServer.call(__MODULE__, {:zona_de, codigo})
+
+  @doc "Recursos que hay en un centro (por ejemplo, en un albergue)."
+  def por_centro(centro), do: GenServer.call(__MODULE__, {:por_centro, centro})
+
+  @doc """
+  Movimientos de un recurso (`list_movements`), del más antiguo al más reciente.
+  Sin código, los movimientos de todos los recursos.
+  """
+  def historial(codigo \\ nil), do: GenServer.call(__MODULE__, {:historial, codigo})
 
   @doc """
   Indica si `punto` es el código de un punto de atención de la zona. Recorre los
@@ -119,6 +143,81 @@ defmodule Emergencias.Recursos do
   end
 
   @impl true
+  def handle_call({:entrada, codigo, codigo_centro, cantidad}, _from, estado) do
+    with {:ok, recurso} <- buscar_recurso(estado, codigo),
+         {:ok, centro} <- buscar_centro(estado, codigo_centro),
+         :ok <- Validaciones.entero_positivo(cantidad, :cantidad_invalida) do
+      actualizado = Recurso.agregar(recurso, centro.codigo, cantidad)
+
+      movimiento =
+        Movimiento.crear(
+          :entrada,
+          codigo,
+          "",
+          centro.codigo,
+          cantidad,
+          "",
+          "Entrada de inventario"
+        )
+
+      nuevo_estado =
+        confirmar(estado, Map.put(estado.recursos, codigo, actualizado), [movimiento])
+
+      {:reply, {:ok, actualizado}, nuevo_estado}
+    else
+      {:error, razon} -> {:reply, {:error, razon}, estado}
+    end
+  end
+
+  @impl true
+  def handle_call({:salida, codigo, codigo_centro, cantidad}, _from, estado) do
+    with {:ok, recurso} <- buscar_recurso(estado, codigo),
+         {:ok, centro} <- buscar_centro(estado, codigo_centro),
+         :ok <- Validaciones.entero_positivo(cantidad, :cantidad_invalida),
+         {:ok, actualizado} <- Recurso.retirar(recurso, centro.codigo, cantidad) do
+      movimiento =
+        Movimiento.crear(:salida, codigo, centro.codigo, "", cantidad, "", "Salida de inventario")
+
+      nuevo_estado =
+        confirmar(estado, Map.put(estado.recursos, codigo, actualizado), [movimiento])
+
+      {:reply, {:ok, actualizado}, nuevo_estado}
+    else
+      {:error, razon} -> {:reply, {:error, razon}, estado}
+    end
+  end
+
+  @impl true
+  def handle_call({:transferir, codigo, codigo_origen, codigo_destino, cantidad}, _from, estado) do
+    with {:ok, recurso} <- buscar_recurso(estado, codigo),
+         {:ok, origen} <- buscar_centro(estado, codigo_origen),
+         {:ok, destino} <- buscar_centro(estado, codigo_destino),
+         :ok <- centros_distintos(origen, destino),
+         :ok <- Validaciones.entero_positivo(cantidad, :cantidad_invalida),
+         {:ok, retirado} <- Recurso.retirar(recurso, origen.codigo, cantidad) do
+      actualizado = Recurso.agregar(retirado, destino.codigo, cantidad)
+
+      movimiento =
+        Movimiento.crear(
+          :transferencia,
+          codigo,
+          origen.codigo,
+          destino.codigo,
+          cantidad,
+          "",
+          "Transferencia"
+        )
+
+      nuevo_estado =
+        confirmar(estado, Map.put(estado.recursos, codigo, actualizado), [movimiento])
+
+      {:reply, {:ok, actualizado}, nuevo_estado}
+    else
+      {:error, razon} -> {:reply, {:error, razon}, estado}
+    end
+  end
+
+  @impl true
   def handle_call({:consultar, codigo}, _from, estado) do
     {:reply, buscar_recurso(estado, codigo), estado}
   end
@@ -146,6 +245,36 @@ defmodule Emergencias.Recursos do
       {:ok, centro} -> {:reply, {:ok, centro.zona}, estado}
       {:error, razon} -> {:reply, {:error, razon}, estado}
     end
+  end
+
+  @impl true
+  def handle_call({:por_centro, centro}, _from, estado) do
+    lista =
+      estado.recursos
+      |> Map.values()
+      |> Enum.filter(fn recurso -> Recurso.disponible(recurso, centro) > 0 end)
+      |> Enum.sort_by(fn recurso -> recurso.codigo end)
+      |> Enum.map(fn recurso ->
+        %{
+          codigo: recurso.codigo,
+          nombre: recurso.nombre,
+          categoria: recurso.categoria,
+          cantidad: Recurso.disponible(recurso, centro),
+          unidad: recurso.unidad
+        }
+      end)
+
+    {:reply, lista, estado}
+  end
+
+  @impl true
+  def handle_call({:historial, codigo}, _from, estado) do
+    lista =
+      estado.movimientos
+      |> Enum.filter(fn movimiento -> codigo == nil or movimiento.codigo == codigo end)
+      |> Enum.reverse()
+
+    {:reply, lista, estado}
   end
 
   # ========== Funciones auxiliares privadas ==========
@@ -199,6 +328,10 @@ defmodule Emergencias.Recursos do
       nil -> {:error, :centro_no_existe}
       centro -> {:ok, centro}
     end
+  end
+
+  defp centros_distintos(origen, destino) do
+    if origen.codigo == destino.codigo, do: {:error, :mismo_centro}, else: :ok
   end
 
   # Si no se da un nombre, el recurso se llama como su categoría
