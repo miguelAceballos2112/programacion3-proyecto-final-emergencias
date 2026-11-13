@@ -6,7 +6,7 @@ defmodule Emergencias.Application do
   con todos los procesos del sistema.
   - Integrante 1: base del sistema (sesiones, usuarios y zonas)
   - Integrante 2: logística (recursos, albergues y necesidades)
-  - Integrante 3: personas (con familias y mensajes)
+  - Integrante 3: personas (con familias y mensajes) y mascotas
   """
 
   use Application
@@ -24,9 +24,9 @@ defmodule Emergencias.Application do
       # Zonas; Albergues llama a Recursos y Personas; Necesidades llama a los cuatro.
       Emergencias.Recursos,
       Emergencias.Personas,
+      Emergencias.Mascotas,
       Emergencias.Albergues,
       Emergencias.Necesidades
-      # Integrante 3, pendiente: Emergencias.Mascotas (va después de Personas)
     ]
 
     # Cada servidor carga su estado desde archivos al iniciar y no depende de los

@@ -26,8 +26,8 @@ Simulación, en Elixir, de una plataforma multiusuario para coordinar la atenci�
 | Necesidades | Integrante 2 | Listo |
 | Albergues | Integrante 2 | Listo (el ingreso y la salida necesitan `Personas`) |
 | Comandos de logística (`comandos/logistica.ex`) | Integrante 2 | Listo; falta conectarlos al despachador |
-| Personas, familias y mensajes | Integrante 3 | Listo (`Personas`; las pruebas del servidor y de las estructuras se escribieron sin poder ejecutarlas: correr `mix test`) |
-| Mascotas | Integrante 3 | Pendiente |
+| Personas, familias y mensajes | Integrante 3 | Listo |
+| Mascotas | Integrante 3 | Listo |
 | Resumen e interfaz de comandos | Integrante 3 | Pendiente |
 
 ## Requisitos
@@ -71,7 +71,7 @@ Emergencias.Supervisor (:one_for_one)
 ├── Emergencias.Albergues   (GenServer)
 ├── Emergencias.Necesidades (GenServer)
 ├── Emergencias.Personas    (GenServer)  personas, familias y mensajes
-└── Emergencias.Mascotas    (GenServer)  pendiente
+└── Emergencias.Mascotas    (GenServer)  reportes de mascotas y coincidencias
 ```
 
 ### Decisiones de diseño
@@ -98,7 +98,7 @@ Archivos de texto plano en la carpeta `datos/` (se crea al ejecutar; no se versi
 | `albergues.txt` | Albergues, ocupación inicial y ocupantes | Listo |
 | `personas.txt`, `historial_personas.txt` | Personas (`id;documento;nombre;edad;zona;estado;familia`) e historial de estados (solo se agregan líneas) | Listo |
 | `familias.txt`, `mensajes.txt` | Familias con sus miembros y mensajes a personas o familias | Listo |
-| `mascotas.txt` | Reportes de mascotas | Pendiente |
+| `mascotas.txt` | Reportes de mascotas con su estado y su pareja | Listo |
 
 _Los nombres de los archivos pendientes son los previstos; ajustarlos si cambian._
 
@@ -128,10 +128,10 @@ Tipos de usuario: `ciudadano`, `voluntario`, `coordinador` y `administrador`. Co
 | `register_need`, `list_needs`, `pending_needs`, `critical_resources` | `Necesidades` | Listo en `Comandos.Logistica`; falta conectarlo al despachador |
 | `register_shelter`, `check_shelter`, `register_entry`, `register_exit` | `Albergues` | Listo en `Comandos.Logistica`; falta conectarlo al despachador |
 | `report_person`, `find_person`, `update_person_status`, `person_history`, `register_family`, `add_family_member`, `send_family_message`, `list_family_messages`, `mark_message` | `Personas` | Función lista (ver `docs/rol3-personas.md`); falta `Comandos.Personas` y conectarlo al despachador |
-| `report_pet`, `match_pets` | `Mascotas` | Pendiente |
+| `report_pet`, `list_pets`, `match_pets`, `reject_match`, `confirm_match` | `Mascotas` | Función lista (ver `docs/rol3-mascotas.md`); falta `Comandos.Personas` y conectarlo al despachador |
 | `summary` | `Reportes` | Pendiente |
 
-Los comandos de personas están en `docs/rol3-personas.md`.
+Los comandos de personas están en `docs/rol3-personas.md` y los de mascotas en `docs/rol3-mascotas.md`.
 
 Los 20 comandos de logística (los cuatro de arriba y los propios, como `register_center`, `add_stock` o `cancel_need`) y su función están en `docs/rol2-logistica.md`.
 
@@ -165,6 +165,12 @@ Los 20 comandos de logística (los cuatro de arriba y los propios, como `registe
   - Structs `Persona`, `Familia` y `Mensaje`.
   - Tabla de transiciones de estado como mapa `estado => [estados permitidos]`.
 - **Funciones recursivas propias** (Integrante 3): `Personas.filtrar/2` y `cumple?/2`, `filtrar_historial/2`, `reunir_mensajes/2` y `siguiente_numero/2` (con acumulador).
+- **Mascotas (Integrante 3):**
+  - Mapa `%{"M001" => reporte}` en el estado de `Mascotas`.
+  - `MapSet` con las palabras de las características (puntaje de similitud) y con los reportes ya usados (`elegir_pares/2`).
+  - Lista de atributos con su peso `[color: 20, tamano: 15, ...]`, que recorre `Similitud.puntaje/3`.
+  - Struct `Reporte` y tabla de transiciones como mapa `estado => [estados permitidos]`.
+- **Funciones recursivas propias** (Integrante 3, mascotas): `Similitud.puntaje/3` con `sumar/3`, `Mascotas.filtrar/2`, `Mascotas.elegir_pares/2` y `marcar_pares/2`.
 
 ## Validaciones y manejo de errores
 

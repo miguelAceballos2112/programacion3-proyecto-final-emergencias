@@ -11,4 +11,7 @@ defmodule Emergencias.DoctestTest do
   doctest Emergencias.Personas
   doctest Emergencias.Personas.Persona
   doctest Emergencias.Personas.Mensaje
+  doctest Emergencias.Mascotas
+  doctest Emergencias.Mascotas.Reporte
+  doctest Emergencias.Mascotas.Similitud
 end
