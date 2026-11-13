@@ -8,4 +8,7 @@ defmodule Emergencias.DoctestTest do
   doctest Emergencias.Usuarios.Usuario
   doctest Emergencias.Zonas.Zona
   doctest Emergencias.Recursos.Reparto
+  doctest Emergencias.Personas
+  doctest Emergencias.Personas.Persona
+  doctest Emergencias.Personas.Mensaje
 end

@@ -6,6 +6,7 @@ defmodule Emergencias.Application do
   con todos los procesos del sistema.
   - Integrante 1: base del sistema (sesiones, usuarios y zonas)
   - Integrante 2: logística (recursos, albergues y necesidades)
+  - Integrante 3: personas (con familias y mensajes)
   """
 
   use Application
@@ -18,16 +19,26 @@ defmodule Emergencias.Application do
       {DynamicSupervisor, strategy: :one_for_one, name: Emergencias.SupervisorSesiones},
       Emergencias.Usuarios,
       Emergencias.Zonas,
-      # Integrante 2: logística, en orden de dependencia (cada uno solo llama a los
-      # que van antes)
+      # Logística (Integrante 2) y personas (Integrante 3), en orden de dependencia:
+      # cada servidor solo llama a los que van antes. Recursos y Personas solo llaman a
+      # Zonas; Albergues llama a Recursos y Personas; Necesidades llama a los cuatro.
       Emergencias.Recursos,
+      Emergencias.Personas,
       Emergencias.Albergues,
       Emergencias.Necesidades
-      # Integrante 3: Emergencias.Personas, Emergencias.Mascotas
+      # Integrante 3, pendiente: Emergencias.Mascotas (va después de Personas)
     ]
 
     # Cada servidor carga su estado desde archivos al iniciar y no depende de los
     # demás para arrancar, así que si uno falla basta con reiniciar solo ese.
-    Supervisor.start_link(hijos, strategy: :one_for_one, name: Emergencias.Supervisor)
+    # max_restarts y max_seconds: las pruebas de caída matan varios servidores seguidos;
+    # con el límite por defecto (3 reinicios en 5 segundos) el supervisor se rendiría y
+    # tumbaría toda la aplicación.
+    Supervisor.start_link(hijos,
+      strategy: :one_for_one,
+      max_restarts: 10,
+      max_seconds: 5,
+      name: Emergencias.Supervisor
+    )
   end
 end

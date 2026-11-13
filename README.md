@@ -26,7 +26,7 @@ Simulación, en Elixir, de una plataforma multiusuario para coordinar la atenci�
 | Necesidades | Integrante 2 | Listo |
 | Albergues | Integrante 2 | Listo (el ingreso y la salida necesitan `Personas`) |
 | Comandos de logística (`comandos/logistica.ex`) | Integrante 2 | Listo; falta conectarlos al despachador |
-| Personas y mensajes | Integrante 3 | Pendiente |
+| Personas, familias y mensajes | Integrante 3 | Listo (`Personas`; las pruebas del servidor y de las estructuras se escribieron sin poder ejecutarlas: correr `mix test`) |
 | Mascotas | Integrante 3 | Pendiente |
 | Resumen e interfaz de comandos | Integrante 3 | Pendiente |
 
@@ -70,7 +70,7 @@ Emergencias.Supervisor (:one_for_one)
 ├── Emergencias.Recursos    (GenServer)
 ├── Emergencias.Albergues   (GenServer)
 ├── Emergencias.Necesidades (GenServer)
-├── Emergencias.Personas    (GenServer)  pendiente
+├── Emergencias.Personas    (GenServer)  personas, familias y mensajes
 └── Emergencias.Mascotas    (GenServer)  pendiente
 ```
 
@@ -96,7 +96,8 @@ Archivos de texto plano en la carpeta `datos/` (se crea al ejecutar; no se versi
 | `recursos.txt`, `movimientos.txt` | Inventario por centro e historial de movimientos (las reservas llevan el id de la necesidad) | Listo |
 | `necesidades.txt` | Necesidades puntuales con su destino | Listo |
 | `albergues.txt` | Albergues, ocupación inicial y ocupantes | Listo |
-| `personas.txt`, `historial_personas.txt`, `mensajes.txt` | Personas, historial de estados y mensajes | Pendiente |
+| `personas.txt`, `historial_personas.txt` | Personas (`id;documento;nombre;edad;zona;estado;familia`) e historial de estados (solo se agregan líneas) | Listo |
+| `familias.txt`, `mensajes.txt` | Familias con sus miembros y mensajes a personas o familias | Listo |
 | `mascotas.txt` | Reportes de mascotas | Pendiente |
 
 _Los nombres de los archivos pendientes son los previstos; ajustarlos si cambian._
@@ -126,9 +127,11 @@ Tipos de usuario: `ciudadano`, `voluntario`, `coordinador` y `administrador`. Co
 | `register_resource`, `list_resources`, `transfer_resource`, `assign_resource` | `Recursos`, `Necesidades` | Listo en `Comandos.Logistica`; falta conectarlo al despachador |
 | `register_need`, `list_needs`, `pending_needs`, `critical_resources` | `Necesidades` | Listo en `Comandos.Logistica`; falta conectarlo al despachador |
 | `register_shelter`, `check_shelter`, `register_entry`, `register_exit` | `Albergues` | Listo en `Comandos.Logistica`; falta conectarlo al despachador |
-| `report_person`, `find_person`, `send_family_message`, `list_family_messages` | `Personas` | Pendiente |
+| `report_person`, `find_person`, `update_person_status`, `person_history`, `register_family`, `add_family_member`, `send_family_message`, `list_family_messages`, `mark_message` | `Personas` | Función lista (ver `docs/rol3-personas.md`); falta `Comandos.Personas` y conectarlo al despachador |
 | `report_pet`, `match_pets` | `Mascotas` | Pendiente |
 | `summary` | `Reportes` | Pendiente |
+
+Los comandos de personas están en `docs/rol3-personas.md`.
 
 Los 20 comandos de logística (los cuatro de arriba y los propios, como `register_center`, `add_stock` o `cancel_need`) y su función están en `docs/rol2-logistica.md`.
 
@@ -155,7 +158,13 @@ Los 20 comandos de logística (los cuatro de arriba y los propios, como `registe
   - `Validaciones.buscar_opcion/3`.
   - `Comandos.Logistica.opcion/2` y `filtros/1`.
 
-_Agregar aquí las estructuras y funciones recursivas del Integrante 3._
+- **Personas (Integrante 3):**
+  - Mapas de mapas en el estado de `Personas`: `%{documento => persona}`, `%{"F001" => familia}` y `%{"MSG001" => mensaje}`.
+  - `MapSet` con los documentos de los miembros de cada familia.
+  - Tuplas `{:persona, documento}` y `{:familia, codigo}` para el destino de un mensaje.
+  - Structs `Persona`, `Familia` y `Mensaje`.
+  - Tabla de transiciones de estado como mapa `estado => [estados permitidos]`.
+- **Funciones recursivas propias** (Integrante 3): `Personas.filtrar/2` y `cumple?/2`, `filtrar_historial/2`, `reunir_mensajes/2` y `siguiente_numero/2` (con acumulador).
 
 ## Validaciones y manejo de errores
 
@@ -186,7 +195,7 @@ Con las partes de los integrantes 1 y 2 se obtienen **19 doctests y 127 pruebas,
 
 Las pruebas guardan sus datos en una carpeta temporal, sin tocar `datos/`.
 
-Otras 7 pruebas usan `Emergencias.Personas` (ingreso y salida de albergues y destinos de tipo persona o familia). Mientras ese módulo no exista, `test_helper.exs` las omite, `mix test` muestra "7 excluded" y el compilador avisa que las funciones de `Personas` todavía no existen.
+Otras 7 pruebas usan `Emergencias.Personas` (ingreso y salida de albergues y destinos de tipo persona o familia). Ahora que el módulo existe, `test_helper.exs` ya no las omite y se ejecutan solas.
 
 _Actualizar el conteo cuando los otros integrantes agreguen sus pruebas._
 
