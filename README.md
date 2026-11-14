@@ -28,6 +28,7 @@ Simulación, en Elixir, de una plataforma multiusuario para coordinar la atenci�
 | Comandos de logística (`comandos/logistica.ex`) | Integrante 2 | Listo; falta conectarlos al despachador |
 | Personas, familias y mensajes | Integrante 3 | Listo |
 | Mascotas | Integrante 3 | Listo |
+| Comandos de personas y mascotas (`comandos/personas.ex`) | Integrante 3 | Listo; falta conectarlos al despachador |
 | Resumen e interfaz de comandos | Integrante 3 | Pendiente |
 
 ## Requisitos
@@ -127,11 +128,11 @@ Tipos de usuario: `ciudadano`, `voluntario`, `coordinador` y `administrador`. Co
 | `register_resource`, `list_resources`, `transfer_resource`, `assign_resource` | `Recursos`, `Necesidades` | Listo en `Comandos.Logistica`; falta conectarlo al despachador |
 | `register_need`, `list_needs`, `pending_needs`, `critical_resources` | `Necesidades` | Listo en `Comandos.Logistica`; falta conectarlo al despachador |
 | `register_shelter`, `check_shelter`, `register_entry`, `register_exit` | `Albergues` | Listo en `Comandos.Logistica`; falta conectarlo al despachador |
-| `report_person`, `find_person`, `update_person_status`, `person_history`, `register_family`, `add_family_member`, `send_family_message`, `list_family_messages`, `mark_message` | `Personas` | Función lista (ver `docs/rol3-personas.md`); falta `Comandos.Personas` y conectarlo al despachador |
-| `report_pet`, `list_pets`, `match_pets`, `reject_match`, `confirm_match` | `Mascotas` | Función lista (ver `docs/rol3-mascotas.md`); falta `Comandos.Personas` y conectarlo al despachador |
+| `report_person`, `find_person`, `update_person_status`, `person_history`, `register_family`, `add_family_member`, `send_family_message`, `list_family_messages`, `mark_message` | `Personas` | Listo en `Comandos.Personas` (ver `docs/rol3-personas.md`); falta conectarlo al despachador |
+| `report_pet`, `list_pets`, `match_pets`, `reject_match`, `confirm_match` | `Mascotas` | Listo en `Comandos.Personas` (ver `docs/rol3-mascotas.md`); falta conectarlo al despachador |
 | `summary` | `Reportes` | Pendiente |
 
-Los comandos de personas están en `docs/rol3-personas.md` y los de mascotas en `docs/rol3-mascotas.md`.
+Los comandos de personas están en `docs/rol3-personas.md`, los de mascotas en `docs/rol3-mascotas.md` y la sintaxis de los 14 comandos en `docs/rol3-comandos.md`.
 
 Los 20 comandos de logística (los cuatro de arriba y los propios, como `register_center`, `add_stock` o `cancel_need`) y su función están en `docs/rol2-logistica.md`.
 

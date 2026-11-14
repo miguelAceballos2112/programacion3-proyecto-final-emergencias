@@ -2,3 +2,4 @@
 /deps/
 .elixir_ls/
 /datos/*
+.DS_Store
