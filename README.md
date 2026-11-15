@@ -228,9 +228,20 @@ mix run escenarios/flujo_ejemplo.exs
 
 Recorre el ejemplo de principio a fin: conexión de Laura (coordinadora), Pedro (ciudadano) y Marta (voluntaria); zona, centro de acopio y agua; las dos solicitudes simultáneas; personas, familia y mensajes; ingreso y salida de un albergue; mascotas perdidas y encontradas; y un resumen final. Cada paso muestra el comando y su respuesta. Usa una carpeta de datos temporal. Mientras el despachador no esté conectado, el propio script elige entre `Comandos.Personas` y `Comandos.Logistica`.
 
+## Dos nodos cliente contra un servidor
+
+`escenarios/cliente_remoto.exs` usa nodos distribuidos de Erlang: un servidor guarda el inventario y dos clientes (Laura con 30 litros y Pedro con 25, sobre 50) lo llaman con `:rpc.call/5` al mismo tiempo. Las instrucciones de las cuatro terminales están al inicio del script. En resumen:
+
+1. Servidor: `rm -rf datos` y `elixir --sname servidor --cookie emergencias -S mix run --no-halt`.
+2. Una vez: `elixir --sname admin --cookie emergencias -S mix run --no-start escenarios/cliente_remoto.exs preparar`.
+3. Dos clientes, con pocos segundos de diferencia: `... --sname laura ... pedir laura 30` y `... --sname pedro ... pedir pedro 25`.
+4. Resultado: uno recibe el agua y el otro recibe `:stock_insuficiente`. `... resumen` muestra el inventario.
+
+Si el servidor está apagado, `:rpc.call` devuelve `{:badrpc, :nodedown}` y el cliente lo traduce a `:servidor_no_disponible`.
+
 ## Diagramas, informe y video
 
 - Arquitectura de módulos y árbol OTP: _(enlace)_
-- Modelo de datos: _(enlace)_
+- Modelo de datos: `docs/diagramas/modelo_datos.png` (fuente Mermaid en `docs/diagramas/modelo_datos.md`)
 - Diagrama de secuencia del conflicto concurrente: `docs/diagramas/secuencia_conflicto.png` (fuente Mermaid en `docs/diagramas/secuencia_conflicto.md`)
 - Video de demostración: _(enlace)_
