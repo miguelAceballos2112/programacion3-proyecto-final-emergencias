@@ -220,6 +220,14 @@ El escenario muestra tres casos:
 
 Funciona porque `Recursos` decide cada reserva dentro de un `handle_call`: la verificación y el descuento ocurren en el mismo mensaje. El escenario usa una carpeta de datos temporal.
 
+## Flujo completo del enunciado
+
+```
+mix run escenarios/flujo_ejemplo.exs
+```
+
+Recorre el ejemplo de principio a fin: conexión de Laura (coordinadora), Pedro (ciudadano) y Marta (voluntaria); zona, centro de acopio y agua; las dos solicitudes simultáneas; personas, familia y mensajes; ingreso y salida de un albergue; mascotas perdidas y encontradas; y un resumen final. Cada paso muestra el comando y su respuesta. Usa una carpeta de datos temporal. Mientras el despachador no esté conectado, el propio script elige entre `Comandos.Personas` y `Comandos.Logistica`.
+
 ## Diagramas, informe y video
 
 - Arquitectura de módulos y árbol OTP: _(enlace)_
