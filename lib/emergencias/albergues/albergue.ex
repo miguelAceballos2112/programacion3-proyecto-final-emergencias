@@ -7,13 +7,26 @@ defmodule Emergencias.Albergues.Albergue do
   es la ocupación inicial más el tamaño del conjunto.
   """
 
+  # `ocupantes` no lleva un `MapSet.new()` como valor por defecto: ese valor se calcula
+  # al compilar y queda guardado como un mapa común, y Dialyzer avisa que un `MapSet`
+  # (tipo opaco) no debe tratarse así. El conjunto vacío lo pone `crear/5`.
   defstruct codigo: "",
             nombre: "",
             zona: "",
             capacidad: 0,
             ocupacion_inicial: 0,
-            ocupantes: MapSet.new()
+            ocupantes: nil
 
+  @type t :: %__MODULE__{
+          codigo: String.t(),
+          nombre: String.t(),
+          zona: String.t(),
+          capacidad: integer(),
+          ocupacion_inicial: integer(),
+          ocupantes: MapSet.t(String.t())
+        }
+
+  @spec crear(String.t(), String.t(), String.t(), integer(), integer()) :: t()
   def crear(codigo, nombre, zona, capacidad, ocupacion_inicial \\ 0) do
     %__MODULE__{
       codigo: codigo,
@@ -25,10 +38,12 @@ defmodule Emergencias.Albergues.Albergue do
     }
   end
 
+  @spec ocupacion(t()) :: integer()
   def ocupacion(%__MODULE__{} = albergue) do
     albergue.ocupacion_inicial + MapSet.size(albergue.ocupantes)
   end
 
+  @spec cupos(t()) :: integer()
   def cupos(%__MODULE__{} = albergue), do: albergue.capacidad - ocupacion(albergue)
 
   @doc "Porcentaje de ocupación con un decimal."
@@ -40,18 +55,20 @@ defmodule Emergencias.Albergues.Albergue do
     do: MapSet.member?(albergue.ocupantes, documento)
 
   @doc "Ingresa una persona si no está adentro y si hay cupo."
+  @spec ingresar(t(), String.t()) :: {:ok, t()} | {:error, :ya_esta_en_albergue | :albergue_lleno}
   def ingresar(%__MODULE__{} = albergue, documento) do
     cond do
       esta?(albergue, documento) -> {:error, :ya_esta_en_albergue}
       cupos(albergue) <= 0 -> {:error, :albergue_lleno}
-      true -> {:ok, %{albergue | ocupantes: MapSet.put(albergue.ocupantes, documento)}}
+      true -> {:ok, %__MODULE__{albergue | ocupantes: MapSet.put(albergue.ocupantes, documento)}}
     end
   end
 
   @doc "Saca a una persona que está adentro."
+  @spec salir(t(), String.t()) :: {:ok, t()} | {:error, :no_esta_en_albergue}
   def salir(%__MODULE__{} = albergue, documento) do
     if esta?(albergue, documento) do
-      {:ok, %{albergue | ocupantes: MapSet.delete(albergue.ocupantes, documento)}}
+      {:ok, %__MODULE__{albergue | ocupantes: MapSet.delete(albergue.ocupantes, documento)}}
     else
       {:error, :no_esta_en_albergue}
     end
@@ -85,7 +102,7 @@ defmodule Emergencias.Albergues.Albergue do
         String.to_integer(ocupacion_inicial)
       )
 
-    %{albergue | ocupantes: MapSet.new(String.split(ocupantes, ",", trim: true))}
+    %__MODULE__{albergue | ocupantes: MapSet.new(String.split(ocupantes, ",", trim: true))}
   end
 
   # Caso base: se llegó al final, va de último

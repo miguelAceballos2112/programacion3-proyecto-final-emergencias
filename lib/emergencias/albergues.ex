@@ -23,6 +23,8 @@ defmodule Emergencias.Albergues do
 
   @archivo "albergues.txt"
 
+  # Dialyzer confunde el MapSet de Albergue (tipo opaco) con un mapa común
+  @dialyzer {:no_opaque, handle_call: 3}
   # ========== API del cliente ==========
 
   def start_link(_opciones) do
@@ -224,6 +226,7 @@ defmodule Emergencias.Albergues do
     end
   end
 
+  @spec guardar(%{String.t() => Albergue.t()}, Albergue.t()) :: %{String.t() => Albergue.t()}
   defp guardar(albergues, albergue) do
     nuevos = Map.put(albergues, albergue.codigo, albergue)
 
