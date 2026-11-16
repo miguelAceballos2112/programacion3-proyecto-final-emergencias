@@ -5,6 +5,9 @@ defmodule Emergencias.DoctestTest do
   doctest Emergencias.Persistencia
   doctest Emergencias.Validaciones
   doctest Emergencias.Permisos
+  doctest Emergencias.Errores
+  doctest Emergencias.Reportes
+  doctest Emergencias.Comandos.Parser
   doctest Emergencias.Usuarios.Usuario
   doctest Emergencias.Zonas.Zona
   doctest Emergencias.Recursos.Reparto
