@@ -2,22 +2,25 @@ defmodule Emergencias.Usuarios do
   @moduledoc """
   Gestión de usuarios: registro, conexión, permisos y actividad.
 
-  Es un `GenServer`. Su estado tiene dos partes:
+  Es un `GenServer`. Su estado tiene tres partes:
   - `usuarios`: mapa `%{nombre_de_usuario => %Usuario{}}`, guardado en `usuarios.txt`.
   - `sesiones`: mapa `%{nombre_de_usuario => pid}` de los usuarios conectados.
-  La actividad de cada usuario se registra en `actividad.txt`.
+  - `duenos`: mapa `%{pid => nombre_de_usuario}` con el proceso dueño de cada sesión
+    (la consola o la pestaña del navegador desde donde se conectó). Se vigila con
+    `Process.monitor`: si ese proceso termina, la sesión se cierra sola.
+  La actividad de cada usuario la guarda la `Bitacora` en `actividad.txt`.
   - Integrante 1: usuarios
   """
 
   use GenServer
 
+  alias Emergencias.Bitacora
   alias Emergencias.Permisos
   alias Emergencias.Persistencia
   alias Emergencias.Sesion
   alias Emergencias.Usuarios.Usuario
 
   @archivo_usuarios "usuarios.txt"
-  @archivo_actividad "actividad.txt"
 
   # ========== API del cliente ==========
 
@@ -40,9 +43,12 @@ defmodule Emergencias.Usuarios do
   indicados. Si ya existe, valida la contraseña y usa los datos guardados.
   Retorna `{:ok, datos}` (con `registrado: true` si se acaba de crear) o
   `{:error, razon}`.
+
+  `dueno` es opcional: el pid de la consola o de la pestaña que abre la sesión. Si
+  se indica, cuando ese proceso termine la sesión se cierra automáticamente.
   """
-  def conectar(usuario, contrasena, tipo, zona) do
-    GenServer.call(__MODULE__, {:conectar, usuario, contrasena, tipo, zona})
+  def conectar(usuario, contrasena, tipo, zona, dueno \\ nil) do
+    GenServer.call(__MODULE__, {:conectar, usuario, contrasena, tipo, zona, dueno})
   end
 
   @doc "Desconecta a un usuario (`disconnect`). Retorna `:ok` o `{:error, :no_conectado}`."
@@ -58,15 +64,25 @@ defmodule Emergencias.Usuarios do
   def autorizar(usuario, accion), do: GenServer.call(__MODULE__, {:autorizar, usuario, accion})
 
   @doc """
-  Registra una acción realizada por un usuario. No espera respuesta (`cast`).
-  Los demás módulos la llaman cuando un usuario modifica algo.
+  Registra una acción realizada por un usuario. No espera respuesta: se la envía a
+  la `Bitacora` con `send`. El despachador de comandos la llama en cada comando.
   """
-  def registrar_actividad(usuario, accion, detalle) do
-    GenServer.cast(__MODULE__, {:actividad, usuario, accion, detalle})
+  def registrar_actividad(usuario, accion, detalle, resultado \\ :ok) do
+    Bitacora.registrar(usuario, accion, detalle, resultado)
   end
 
   @doc "Actividad de un usuario, como lista de `{fecha, accion, detalle}`."
-  def actividad(usuario), do: GenServer.call(__MODULE__, {:actividad, usuario})
+  def actividad(usuario) do
+    usuario
+    |> Bitacora.consultar()
+    |> Enum.map(fn evento -> {evento.fecha, evento.accion, evento.detalle} end)
+  end
+
+  @doc "Lista los usuarios registrados (sin la huella de la contraseña), por nombre."
+  def listar, do: GenServer.call(__MODULE__, :listar)
+
+  @doc "Nombres de los usuarios conectados en este momento."
+  def conectados, do: GenServer.call(__MODULE__, :conectados)
 
   # ========== Callbacks del servidor ==========
 
@@ -74,7 +90,7 @@ defmodule Emergencias.Usuarios do
   def init(:ok) do
     # Si el servidor se reinició, las sesiones anteriores quedaron sin dueño
     cerrar_sesiones_huerfanas()
-    {:ok, %{usuarios: cargar_usuarios(), sesiones: %{}}}
+    {:ok, %{usuarios: cargar_usuarios(), sesiones: %{}, duenos: %{}}}
   end
 
   @impl true
@@ -90,27 +106,36 @@ defmodule Emergencias.Usuarios do
   end
 
   @impl true
-  def handle_call({:conectar, usuario, contrasena, tipo, zona}, _from, estado) do
+  def handle_call({:conectar, usuario, contrasena, tipo, zona, dueno}, _from, estado) do
     {respuesta, nuevo_estado} =
       case Map.get(estado.usuarios, usuario) do
         nil -> registrar_y_conectar(estado, usuario, contrasena, tipo, zona)
         existente -> autenticar_y_conectar(estado, existente, contrasena)
       end
 
-    {:reply, respuesta, nuevo_estado}
+    {:reply, respuesta, vigilar_dueno(nuevo_estado, respuesta, usuario, dueno)}
   end
 
   @impl true
   def handle_call({:desconectar, usuario}, _from, estado) do
-    case Map.pop(estado.sesiones, usuario) do
-      {nil, _sesiones} ->
-        {:reply, {:error, :no_conectado}, estado}
+    {respuesta, nuevo_estado} = cerrar_sesion(estado, usuario, "")
+    {:reply, respuesta, nuevo_estado}
+  end
 
-      {pid, sesiones} ->
-        Sesion.detener(pid)
-        escribir_actividad(usuario, "disconnect", "")
-        {:reply, :ok, %{estado | sesiones: sesiones}}
-    end
+  @impl true
+  def handle_call(:listar, _from, estado) do
+    usuarios =
+      estado.usuarios
+      |> Map.values()
+      |> Enum.sort_by(fn usuario -> usuario.usuario end)
+      |> Enum.map(fn usuario -> Usuario.publico(usuario) end)
+
+    {:reply, usuarios, estado}
+  end
+
+  @impl true
+  def handle_call(:conectados, _from, estado) do
+    {:reply, estado.sesiones |> Map.keys() |> Enum.sort(), estado}
   end
 
   @impl true
@@ -132,36 +157,55 @@ defmodule Emergencias.Usuarios do
     {:reply, respuesta, estado}
   end
 
-  @impl true
-  def handle_call({:actividad, usuario}, _from, estado) do
-    registros =
-      @archivo_actividad
-      |> Persistencia.cargar()
-      |> Enum.map(&Persistencia.separar/1)
-      |> Enum.filter(fn campos -> Enum.at(campos, 1) == usuario end)
-      |> Enum.map(fn [fecha, _usuario, accion, detalle] -> {fecha, accion, detalle} end)
-
-    {:reply, registros, estado}
-  end
-
-  @impl true
-  def handle_cast({:actividad, usuario, accion, detalle}, estado) do
-    escribir_actividad(usuario, accion, detalle)
-    {:noreply, estado}
-  end
-
-  # Si el proceso de una sesión termina, se quita al usuario de los conectados
+  # Terminó un proceso vigilado. Puede ser:
+  # - el dueño de una sesión (se cerró la consola o la pestaña): se cierra su sesión;
+  # - el proceso de una sesión: se quita al usuario de los conectados.
   @impl true
   def handle_info({:DOWN, _referencia, :process, pid, _razon}, estado) do
-    sesiones =
-      Enum.reduce(estado.sesiones, %{}, fn {usuario, pid_sesion}, acumulado ->
-        if pid_sesion == pid, do: acumulado, else: Map.put(acumulado, usuario, pid_sesion)
-      end)
+    case Map.get(estado.duenos, pid) do
+      nil ->
+        sesiones =
+          Enum.reduce(estado.sesiones, %{}, fn {usuario, pid_sesion}, acumulado ->
+            if pid_sesion == pid, do: acumulado, else: Map.put(acumulado, usuario, pid_sesion)
+          end)
 
-    {:noreply, %{estado | sesiones: sesiones}}
+        {:noreply, %{estado | sesiones: sesiones}}
+
+      usuario ->
+        {_respuesta, nuevo_estado} = cerrar_sesion(estado, usuario, "se cerró la ventana")
+        {:noreply, nuevo_estado}
+    end
   end
 
   # ========== Funciones auxiliares privadas ==========
+
+  # Si la conexión funcionó y hay un proceso dueño, se vigila con un monitor
+  defp vigilar_dueno(estado, {:ok, _datos}, usuario, dueno) when is_pid(dueno) do
+    Process.monitor(dueno)
+    %{estado | duenos: Map.put(estado.duenos, dueno, usuario)}
+  end
+
+  defp vigilar_dueno(estado, _respuesta, _usuario, _dueno), do: estado
+
+  # Cierra la sesión de un usuario: detiene su proceso, lo registra en la Bitácora y
+  # olvida a su dueño. Lo usan disconnect y el cierre de la consola o la pestaña.
+  defp cerrar_sesion(estado, usuario, detalle) do
+    case Map.pop(estado.sesiones, usuario) do
+      {nil, _sesiones} ->
+        {{:error, :no_conectado}, estado}
+
+      {pid, sesiones} ->
+        Sesion.detener(pid)
+        escribir_actividad(usuario, "disconnect", detalle)
+
+        duenos =
+          Enum.reduce(estado.duenos, %{}, fn {pid_dueno, de}, acumulado ->
+            if de == usuario, do: acumulado, else: Map.put(acumulado, pid_dueno, de)
+          end)
+
+        {:ok, %{estado | sesiones: sesiones, duenos: duenos}}
+    end
+  end
 
   # Usuario nuevo: se registra con su nombre de usuario como nombre completo y se conecta
   defp registrar_y_conectar(estado, usuario, contrasena, tipo, zona) do
@@ -231,9 +275,9 @@ defmodule Emergencias.Usuarios do
     Persistencia.guardar(@archivo_usuarios, lineas)
   end
 
+  # La actividad la escribe la Bitácora: aquí solo se le envía el evento
   defp escribir_actividad(usuario, accion, detalle) do
-    linea = Persistencia.unir([ahora(), usuario, accion, Persistencia.limpiar(detalle)])
-    Persistencia.agregar(@archivo_actividad, linea)
+    Bitacora.registrar(usuario, accion, detalle, :ok)
   end
 
   defp ahora, do: NaiveDateTime.local_now() |> NaiveDateTime.to_string()

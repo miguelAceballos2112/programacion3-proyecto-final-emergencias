@@ -14,6 +14,9 @@ defmodule Emergencias.Application do
   @impl true
   def start(_type, _args) do
     hijos = [
+      # Bitácora: proceso independiente (spawn, send y receive) que guarda la actividad
+      # y avisa a los suscriptores. Va primero porque todos le envían eventos.
+      Emergencias.Bitacora,
       # Supervisor dinámico: crea un proceso de sesión por cada usuario conectado.
       # Debe iniciar antes que Usuarios, que lo utiliza.
       {DynamicSupervisor, strategy: :one_for_one, name: Emergencias.SupervisorSesiones},
