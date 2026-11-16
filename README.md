@@ -14,20 +14,6 @@ Simulación, en Elixir, de una plataforma multiusuario para coordinar la atenci�
 | _Victor Manuel Bolaños Guzman_ | Integrante 2 | Logística: recursos, necesidades y albergues |
 | _Nombre 3_ | Integrante 3 | Personas, mensajes, mascotas, resumen e interfaz de comandos |
 
-## Estado del proyecto
-
-| Componente | Responsable | Estado |
-|---|---|---|
-| Aplicación, supervisores y sesiones | Integrante 1 | Listo |
-| Persistencia en texto plano y validaciones | Integrante 1 | Listo |
-| Usuarios, conexión y permisos | Integrante 1 | Listo |
-| Zonas, sectores y puntos de atención | Integrante 1 | Listo |
-| Recursos | Integrante 2 | Pendiente |
-| Necesidades | Integrante 2 | Pendiente |
-| Albergues | Integrante 2 | Pendiente |
-| Personas y mensajes | Integrante 3 | Pendiente |
-| Mascotas | Integrante 3 | Pendiente |
-| Resumen e interfaz de comandos | Integrante 3 | Pendiente |
 
 ## Requisitos
 
@@ -54,8 +40,6 @@ Emergencias.Zonas.registrar_punto("centro", "s3", "p1", "Punto de atención", 10
 Emergencias.Zonas.estado("centro")
 Emergencias.Usuarios.desconectar("laura")
 ```
-
-_Cuando el Integrante 3 entregue la interfaz de comandos, agregar aquí cómo iniciarla y los comandos de ejemplo._
 
 ## Arquitectura
 
@@ -88,16 +72,15 @@ Archivos de texto plano en la carpeta `datos/` (se crea al ejecutar; no se versi
 
 | Archivo | Contenido | Estado |
 |---|---|---|
-| `usuarios.txt` | Usuarios (la contraseña se guarda cifrada con SHA-256) | Listo |
-| `actividad.txt` | Registro de actividad de cada usuario | Listo |
-| `zonas.txt` | Zonas, sectores y puntos de atención | Listo |
-| `recursos.txt`, `movimientos.txt` | Inventario e historial de movimientos | Pendiente |
-| `necesidades.txt` | Necesidades puntuales | Pendiente |
-| `albergues.txt` | Albergues y ocupantes | Pendiente |
-| `personas.txt`, `historial_personas.txt`, `mensajes.txt` | Personas, historial de estados y mensajes | Pendiente |
-| `mascotas.txt` | Reportes de mascotas | Pendiente |
+| `usuarios.txt` | Usuarios (la contraseña se guarda cifrada con SHA-256)
+| `actividad.txt` | Registro de actividad de cada usuario
+| `zonas.txt` | Zonas, sectores y puntos de atención
+| `recursos.txt`, `movimientos.txt` | Inventario e historial de movimientos 
+| `necesidades.txt` | Necesidades puntuales
+| `albergues.txt` | Albergues y ocupantes 
+| `personas.txt`, `historial_personas.txt`, `mensajes.txt` | Personas, historial de estados y mensajes
+| `mascotas.txt` | Reportes de mascotas
 
-_Los nombres de los archivos pendientes son los previstos; ajustarlos si cambian._
 
 ## Usuarios y permisos
 
@@ -117,16 +100,16 @@ Tipos de usuario: `ciudadano`, `voluntario`, `coordinador` y `administrador`. Co
 
 ## Comandos de referencia
 
-| Comando | Módulo | Estado |
-|---|---|---|
-| `connect`, `disconnect` | `Usuarios` | Función lista; falta la interfaz de comandos |
-| `register_zone` | `Zonas` | Función lista; falta la interfaz de comandos |
-| `register_resource`, `list_resources`, `transfer_resource`, `assign_resource` | `Recursos`, `Necesidades` | Pendiente |
-| `register_need`, `list_needs`, `pending_needs`, `critical_resources` | `Necesidades` | Pendiente |
-| `register_shelter`, `check_shelter`, `register_entry`, `register_exit` | `Albergues` | Pendiente |
-| `report_person`, `find_person`, `send_family_message`, `list_family_messages` | `Personas` | Pendiente |
-| `report_pet`, `match_pets` | `Mascotas` | Pendiente |
-| `summary` | `Reportes` | Pendiente |
+| Comando | Módulo |
+|---|---|
+| `connect`, `disconnect` | `Usuarios` | 
+| `register_zone` | `Zonas` | 
+| `register_resource`, `list_resources`, `transfer_resource`, `assign_resource` | `Recursos`, `Necesidades` | 
+| `register_need`, `list_needs`, `pending_needs`, `critical_resources` | `Necesidades` | 
+| `register_shelter`, `check_shelter`, `register_entry`, `register_exit` | `Albergues` | 
+| `report_person`, `find_person`, `send_family_message`, `list_family_messages` | `Personas` | 
+| `report_pet`, `match_pets` | `Mascotas` | 
+| `summary` | `Reportes` | 
 
 ## Estructuras de datos y recursividad
 
@@ -136,7 +119,7 @@ Tipos de usuario: `ciudadano`, `voluntario`, `coordinador` y `administrador`. Co
 - **Structs:** `Usuario`, `Zona`, `Sector` y `PuntoAtencion`, con campos obligatorios.
 - **Funciones recursivas propias** (Integrante 1): `total_sectores/1`, `total_puntos/1`, `contar_puntos/1`, `sectores_por_nivel/2` (con acumulador), `totales_por_sector/1` y las funciones que recorren la jerarquía de zonas al escribir `zonas.txt`.
 
-_Agregar aquí las estructuras y funciones recursivas de los otros integrantes._
+
 
 ## Validaciones y manejo de errores
 
@@ -155,7 +138,6 @@ mix test
 
 Con la parte del Integrante 1 se obtienen **12 doctests y 52 pruebas, 0 fallos**. Incluyen casos válidos, inválidos y límite, conexiones simultáneas de varios usuarios y la recuperación de un servidor que falla (el supervisor lo reinicia y recupera sus datos desde el archivo). Las pruebas guardan sus datos en una carpeta temporal, sin tocar `datos/`.
 
-_Actualizar el conteo cuando los otros integrantes agreguen sus pruebas._
 
 ## Demostración del conflicto concurrente
 
