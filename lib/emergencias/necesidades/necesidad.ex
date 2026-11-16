@@ -21,6 +21,9 @@ defmodule Emergencias.Necesidades.Necesidad do
   @estados [:pendiente, :asignada, :en_atencion, :atendida, :cancelada]
   @tipos_destino [:zona, :punto, :albergue, :persona, :familia]
 
+  # Tipos de necesidad que se atienden sin sacar nada del inventario
+  @sin_inventario [:rescate, :transporte]
+
   defstruct id: "",
             tipo: :otra,
             descripcion: "",
@@ -53,6 +56,13 @@ defmodule Emergencias.Necesidades.Necesidad do
 
   @doc "Lo que todavía falta por cubrir."
   def faltante(%__MODULE__{} = necesidad), do: necesidad.cantidad - necesidad.asignado
+
+  @doc """
+  Indica si la necesidad se cubre con recursos del inventario. Un rescate o un
+  transporte no: pasan de pendiente a en_atencion sin asignación, así que no cuentan
+  como demanda de recursos.
+  """
+  def usa_inventario?(%__MODULE__{tipo: tipo}), do: not Enum.member?(@sin_inventario, tipo)
 
   @doc "Una necesidad está abierta mientras no esté atendida ni cancelada."
   def abierta?(%__MODULE__{estado: estado}), do: estado in [:pendiente, :asignada, :en_atencion]

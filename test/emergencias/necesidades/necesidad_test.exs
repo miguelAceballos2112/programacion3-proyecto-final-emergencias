@@ -19,6 +19,15 @@ defmodule Emergencias.Necesidades.NecesidadTest do
     end
   end
 
+  describe "usa_inventario?/1" do
+    test "un rescate o un transporte no usan inventario" do
+      refute Necesidad.usa_inventario?(nueva(:rescate, 1))
+      refute Necesidad.usa_inventario?(nueva(:transporte, 2))
+      assert Necesidad.usa_inventario?(nueva(:agua, 30))
+      assert Necesidad.usa_inventario?(nueva(:medicamentos, 5))
+    end
+  end
+
   describe "asignaciones" do
     test "la primera asignación la pasa a asignada y nunca se supera lo requerido" do
       necesidad = Necesidad.registrar_asignacion(nueva(:agua, 30), 10)

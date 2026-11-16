@@ -367,5 +367,19 @@ defmodule Emergencias.NecesidadesTest do
                {zona, :alimentos} => 7
              }
     end
+
+    test "un rescate o un transporte no aparecen como recursos críticos" do
+      zona = crear_zona()
+      rescate = necesidad("rescate", 1, "critica", zona)
+      transporte = necesidad("transporte", 3, "alta", zona)
+      agua = necesidad("agua", 10, "media", zona)
+
+      assert Necesidades.demanda_pendiente([rescate, transporte, agua]) == %{{zona, :agua} => 10}
+
+      criticos =
+        Enum.filter(Necesidades.recursos_criticos(), fn critico -> critico.zona == zona end)
+
+      assert Enum.map(criticos, fn critico -> critico.categoria end) == [:agua]
+    end
   end
 end

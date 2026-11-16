@@ -83,7 +83,8 @@ defmodule Emergencias.Necesidades do
 
   @doc """
   Recursos críticos (`critical_resources`): por zona y categoría, la demanda pendiente
-  es mayor que lo disponible en los centros de esa zona.
+  es mayor que lo disponible en los centros de esa zona. Los rescates y transportes no
+  usan inventario, así que no aparecen.
   """
   def recursos_criticos do
     pendientes()
@@ -93,7 +94,10 @@ defmodule Emergencias.Necesidades do
     |> Enum.sort_by(fn critico -> critico.faltante end, :desc)
   end
 
-  @doc "Suma lo que falta por cubrir de cada necesidad, agrupado por `{zona, tipo}`."
+  @doc """
+  Suma lo que falta por cubrir de cada necesidad que usa inventario, agrupado por
+  `{zona, tipo}`.
+  """
   def demanda_pendiente(necesidades), do: sumar_demanda(necesidades, %{})
 
   # ========== Callbacks del servidor ==========
@@ -310,11 +314,20 @@ defmodule Emergencias.Necesidades do
   # Caso base: no quedan necesidades, se devuelve lo acumulado
   defp sumar_demanda([], demanda), do: demanda
 
-  # Caso recursivo: se suma lo que le falta a la primera y se sigue con el resto
+  # Caso recursivo: se suma lo que le falta a la primera y se sigue con el resto.
+  # Un rescate o un transporte no usan inventario: se saltan.
   defp sumar_demanda([head | tail], demanda) do
-    clave = {head.zona, head.tipo}
-    faltante = Necesidad.faltante(head)
-    sumar_demanda(tail, Map.update(demanda, clave, faltante, fn actual -> actual + faltante end))
+    if Necesidad.usa_inventario?(head) do
+      clave = {head.zona, head.tipo}
+      faltante = Necesidad.faltante(head)
+
+      sumar_demanda(
+        tail,
+        Map.update(demanda, clave, faltante, fn actual -> actual + faltante end)
+      )
+    else
+      sumar_demanda(tail, demanda)
+    end
   end
 
   defp critico(zona, categoria, demanda) do
