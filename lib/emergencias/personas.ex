@@ -145,6 +145,10 @@ defmodule Emergencias.Personas do
   @spec listar_mensajes(destino()) :: {:ok, [Mensaje.t()]} | {:error, atom()}
   def listar_mensajes(destino), do: GenServer.call(__MODULE__, {:listar_mensajes, destino})
 
+  @doc "Todos los mensajes, ordenados por id. Lo usa el resumen (`summary`)."
+  @spec mensajes() :: [Mensaje.t()]
+  def mensajes, do: GenServer.call(__MODULE__, :mensajes)
+
   @doc "Cambia un mensaje entre `:entregado` y `:pendiente` (`mark_message`)."
   @spec marcar_mensaje(String.t(), atom() | String.t()) :: {:ok, Mensaje.t()} | {:error, atom()}
   def marcar_mensaje(id, estado), do: GenServer.call(__MODULE__, {:marcar_mensaje, id, estado})
@@ -461,6 +465,14 @@ defmodule Emergencias.Personas do
       {:error, razon} ->
         {:reply, {:error, razon}, estado}
     end
+  end
+
+  @impl true
+  def handle_call(:mensajes, _from, estado) do
+    mensajes =
+      estado.mensajes |> Map.values() |> Enum.sort_by(fn mensaje -> orden(mensaje.id) end)
+
+    {:reply, mensajes, estado}
   end
 
   @impl true
