@@ -50,11 +50,11 @@ Emergencias.Supervisor (:one_for_one)
 ├── Emergencias.SupervisorSesiones (DynamicSupervisor) -> una sesión por usuario conectado
 ├── Emergencias.Usuarios    (GenServer)
 ├── Emergencias.Zonas       (GenServer)
-├── Emergencias.Recursos    (GenServer)  pendiente
-├── Emergencias.Necesidades (GenServer)  pendiente
-├── Emergencias.Albergues   (GenServer)  pendiente
-├── Emergencias.Personas    (GenServer)  pendiente
-└── Emergencias.Mascotas    (GenServer)  pendiente
+├── Emergencias.Recursos    (GenServer)
+├── Emergencias.Necesidades (GenServer)
+├── Emergencias.Albergues   (GenServer)
+├── Emergencias.Personas    (GenServer)
+└── Emergencias.Mascotas    (GenServer)  
 ```
 
 ### Decisiones de diseño
