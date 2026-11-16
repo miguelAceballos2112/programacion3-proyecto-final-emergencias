@@ -1,5 +1,8 @@
 /_build/
 /deps/
+/web/_build/
+/web/deps/
 .elixir_ls/
 /datos/*
 .DS_Store
+erl_crash.dump
